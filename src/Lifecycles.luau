@@ -2,6 +2,8 @@ local RunService = game:GetService("RunService")
 local Modding = require("./Modding")
 
 local Lifecycles = {}
+Lifecycles.PendingManagers = {}
+Lifecycles.IsIgnited = false
 
 function Lifecycles.CreateClientLifecycle(name: string, manager: (fire: () -> ()) -> ())
 	if RunService:IsServer() then return end
@@ -30,7 +32,13 @@ function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -
 		end
 	end
 
-	manager(fire)
+	if Lifecycles.IsIgnited then
+		manager(fire)
+	else
+		Lifecycles.PendingManagers[#Lifecycles.PendingManagers + 1] = function()
+			manager(fire)
+		end
+	end
 
 	return function()
 		addedConnection:disconnect()
