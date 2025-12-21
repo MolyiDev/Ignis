@@ -1,0 +1,8 @@
+std = "roblox"
+
+[config]
+multiple_statements = { one_line_if = "allow" }
+
+[lints]
+incorrect_standard_library_use = "allow"
+mixed_table = "allow"
