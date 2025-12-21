@@ -40,6 +40,7 @@ local DEFAULT_PRIORITY = 1
 local Core = {}
 
 local Singletons: { [string]: object } = {}
+local PendingDependencies: { [string]: object } = {}
 local IsIgnited = false
 local HasShutdown = false
 
@@ -67,17 +68,29 @@ local function topologicalSort(objects: { string }): { [string]: number }
 	local visited: { [string]: true } = {}
 
 	local function visitor(node: string)
+		if visited[node] then return end
 		visited[node] = true
 
 		local object = Singletons[node]
 		if not object then return end
 
-		for _, dependency in object do
-			if typeof(dependency) ~= "table" then continue end
-			if Reflect.ReadMetadata(dependency, "singleton") == nil then continue end
+		local function processDependency(dependency: any)
+			if typeof(dependency) ~= "table" then return end
+			if Reflect.ReadMetadata(dependency, "singleton") == nil then return end
 
-			local name = Reflect.ReadMetadata(dependency, "name") :: string
-			visitor(name)
+			local id = Reflect.GetId(dependency)
+			visitor(id)
+		end
+
+		local dependencies = Reflect.ReadMetadata(object, "dependencies") :: { object }
+		if dependencies then
+			for _, dependency in dependencies do
+				processDependency(dependency)
+			end
+		end
+
+		for _, dependency in object do
+			processDependency(dependency)
 		end
 
 		currentSize += 1
@@ -85,7 +98,6 @@ local function topologicalSort(objects: { string }): { [string]: number }
 	end
 
 	for _, node in objects do
-		if visited[node] then continue end
 		visitor(node)
 	end
 
@@ -108,21 +120,42 @@ function Core.LoadChildren(parent: Instance, predicate: predicate<Instance>?)
 	end)
 end
 
-function Core.Register<T>(members: T & object, isNotListener: boolean?, priority: number?): T
+function Core.Dependency<T>(dependency: T)
+	local source = debug.info(2, "s")
+
+	local list = PendingDependencies[source]
+	if not list then
+		list = {}
+		PendingDependencies[source] = list
+	end
+
+	list[#list + 1] = dependency
+	return dependency
+end
+
+function Core.Register<T>(members: T & object, dependencies: { object }?, priority: number?): T
 	local id = Reflect.GetId(members)
 	local _priority = if typeof(priority) == "number" then priority else DEFAULT_PRIORITY
+	local _dependencies = if typeof(dependencies) == "table" then dependencies else {}
+
+	local source = debug.info(2, "s")
+	local pending = PendingDependencies[source]
+	if pending then
+		for _, dep in pending do
+			_dependencies[#_dependencies + 1] = dep
+		end
+
+		PendingDependencies[source] = nil
+	end
 
 	Reflect.DefineMetadata(members, "singleton", true)
 	Reflect.DefineMetadata(members, "priority", _priority)
+	Reflect.DefineMetadata(members, "dependencies", _dependencies)
 
-	if not isNotListener then Modding.AddListener(members) end
+	Modding.AddListener(members)
 
 	Singletons[id] = members
 	return members
-end
-
-function Core.Listen(name: string, listener: (...any) -> ())
-	return Modding.AddLifecycleListener(name, listener)
 end
 
 function Core.IsIgnited()
@@ -146,22 +179,22 @@ function Core.Ignite()
 		providerIds[#providerIds + 1] = id
 	end
 
-	local start = Modding.GetListeners("OnStart") :: { OnStart }
-	local init = Modding.GetListeners("OnInit") :: { OnInit }
-	local stop = Modding.GetListeners("OnStop") :: { OnStop }
+	local start = Modding.GetListeners("OnStart") :: { OnStart }?
+	local init = Modding.GetListeners("OnInit") :: { OnInit }?
+	local stop = Modding.GetListeners("OnStop") :: { OnStop }?
 
 	local sortedProviders = topologicalSort(providerIds)
 
 	local function sort(a, b)
-		local a_priority = Reflect.ReadMetadata(a, "priority") :: number
-		local b_priority = Reflect.ReadMetadata(b, "priority") :: number
+		local aPriority = Reflect.ReadMetadata(a, "priority") :: number
+		local bPriority = Reflect.ReadMetadata(b, "priority") :: number
 
-		if a_priority ~= b_priority then return a_priority > b_priority end
+		if aPriority ~= bPriority then return aPriority > bPriority end
 
-		local a_id = Reflect.GetId(a)
-		local b_id = Reflect.GetId(b)
+		local aId = Reflect.GetId(a)
+		local bId = Reflect.GetId(b)
 
-		return sortedProviders[a_id] > sortedProviders[b_id]
+		return sortedProviders[aId] > sortedProviders[bId]
 	end
 
 	if start then table.sort(start, sort) end

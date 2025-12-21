@@ -3,7 +3,7 @@ version = "1.0.0"
 authors = ["Molyi"]
 repository = "https://github.com/MolyiEZ/Flux"
 license = "MIT"
-includes = ["src/**/*.luau", "pesde.toml", "LISENCE", "README.md"]
+includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
 
 [target]
 environment = "roblox"
@@ -24,5 +24,3 @@ rojo = { name = "pesde/rojo", version = "^7.5.1", target = "lune" }
 [engines]
 pesde = "^0.7.0"
 lune = "^0.10.2"
-
-[dependencies]
