@@ -1,18 +1,8 @@
-local HttpService = game:GetService("HttpService")
-
-type object = {}
-type metadata = { [string]: unknown }
-
-local internal = {
-	metadata = {} :: { [string]: { [string]: unknown } },
-	registry = {} :: { [string]: unknown },
-}
+local Types = require(script.Parent.Types)
 
 local Reflect = {}
-
-local function tostring(data: unknown): string
-	return HttpService:JSONEncode(data)
-end
+local Metadata: { [string]: { [string]: unknown } } = {}
+local Registry: { [string]: unknown } = {}
 
 local function hash(data: unknown): string
 	local str = tostring(data)
@@ -26,33 +16,33 @@ local function hash(data: unknown): string
 	return `reflect:{bit32.bxor(hash, 0)}`
 end
 
-function Reflect.GetId(object: object): string
+function Reflect.GetId<T>(object: T): string
 	return hash(object)
 end
 
-function Reflect.Register(object: object)
+function Reflect.Register<T>(object: T)
 	local id = Reflect.GetId(object)
-	if internal.registry[id] == nil then
-		local data = internal.metadata[id]
-		internal.metadata[id] = if typeof(data) == "table" then data else {}
+	if Registry[id] == nil then
+		local data = Metadata[id]
+		Metadata[id] = if typeof(data) == "table" then data else {}
 
-		internal.registry[id] = object
+		Registry[id] = object
 	end
 end
 
-function Reflect.GetMetadata(object: object): metadata
+function Reflect.GetMetadata<T>(object: T): Types.Metadata
 	Reflect.Register(object)
 
 	local id = Reflect.GetId(object)
-	return internal.metadata[id]
+	return Metadata[id]
 end
 
-function Reflect.ReadMetadata(object: object, key: string): unknown
+function Reflect.ReadMetadata<T>(object: T, key: string): unknown
 	local metadata = Reflect.GetMetadata(object)
 	return metadata[key]
 end
 
-function Reflect.DefineMetadata(object: object, key: string, value: unknown)
+function Reflect.DefineMetadata<T>(object: T, key: string, value: unknown)
 	local metadata = Reflect.GetMetadata(object)
 	metadata[key] = value
 end

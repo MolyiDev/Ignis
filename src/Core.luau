@@ -1,46 +1,13 @@
-local Lifecycles = require(script.Parent.Lifecycles)
+local Types = require(script.Parent.Types)
+local Lifecycles = require(script.Parent.Lifecycles) :: Types.PrivateLifecycles
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
-
-type object = { [any]: any }
-type predicate<T> = (T) -> boolean
-
-type OnStart = object & { OnStart: (self: OnStart) -> () }
-type OnInit = object & { OnInit: (self: OnInit) -> () }
-type OnStop = object & { OnStop: (self: OnStop) -> () }
-
-type extender =
-	& (<A>(A) -> A)
-	& (<A, B>(A, B) -> A & B)
-	& (<A, B, C>(A, B, C) -> A & B & C)
-	& (<A, B, C, D>(A, B, C, D) -> A & B & C & D)
-	& (<A, B, C, D, E>(A, B, C, D, E) -> A & B & C & D & E)
-	& (<A, B, C, D, E, F>(A, B, C, D, E, F) -> A & B & C & D & E & F)
-	& (<A, B, C, D, E, F, G>(A, B, C, D, E, F, G) -> A & B & C & D & E & F & G)
-	& (<A, B, C, D, E, F, G, H>(A, B, C, D, E, F, G, H) -> A & B & C & D & E & F & G & H)
-	& (<A, B, C, D, E, F, G, H, I>(A, B, C, D, E, F, G, H, I) -> A & B & C & D & E & F & G & H & I)
-	& (<A, B, C, D, E, F, G, H, I, J>(A, B, C, D, E, F, G, H, I, J) -> A & B & C & D & E & F & G & H & I & J)
-	& (<A, B, C, D, E, F, G, H, I, J, K>(A, B, C, D, E, F, G, H, I, J, K) -> A & B & C & D & E & F & G & H & I & J & K)
-	& (<A, B, C, D, E, F, G, H, I, J, K, L>(
-		A,
-		B,
-		C,
-		D,
-		E,
-		F,
-		G,
-		H,
-		I,
-		J,
-		K,
-		L
-	) -> A & B & C & D & E & F & G & H & I & J & K & L)
 
 local DEFAULT_PRIORITY = 1
 local Core = {}
 
-local Singletons: { [string]: object } = {}
-local PendingDependencies: { [string]: object } = {}
+local Singletons: { [string]: any } = {}
+local PendingDependencies: { [string]: Types.Object } = {}
 local IsIgnited = false
 local HasShutdown = false
 
@@ -49,20 +16,6 @@ local function saferequire(module: ModuleScript): unknown
 	return success and result
 end
 
-local function extend(...)
-	local result = {}
-
-	for i = 1, select("#", ...) do
-		local source = select(i, ...)
-
-		for key, value in source do
-			if typeof(value) == "boolean" or typeof(value) == "table" then continue end
-			result[key] = value
-		end
-	end
-
-	return result
-end
 local function topologicalSort(objects: { string }): { [string]: number }
 	local currentSize = 0
 	local sorted: { [string]: number } = {}
@@ -83,7 +36,7 @@ local function topologicalSort(objects: { string }): { [string]: number }
 			visitor(id)
 		end
 
-		local dependencies = Reflect.ReadMetadata(object, "dependencies") :: { object }
+		local dependencies = Reflect.ReadMetadata(object, "dependencies") :: { Types.Object }
 		if dependencies then
 			for _, dependency in dependencies do
 				processDependency(dependency)
@@ -105,7 +58,7 @@ local function topologicalSort(objects: { string }): { [string]: number }
 	return sorted
 end
 
-function Core.LoadDescendants(parent: Instance, predicate: predicate<Instance>?)
+function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Instance>?)
 	for _, descendant in parent:GetDescendants() do
 		if predicate and not predicate(descendant) then continue end
 		if not descendant:IsA("ModuleScript") then continue end
@@ -114,7 +67,7 @@ function Core.LoadDescendants(parent: Instance, predicate: predicate<Instance>?)
 	end
 end
 
-function Core.LoadChildren(parent: Instance, predicate: predicate<Instance>?)
+function Core.LoadChildren(parent: Instance, predicate: Types.Predicate<Instance>?)
 	Core.LoadDescendants(parent, function(descendant: Instance)
 		local isChild = descendant.Parent == parent
 		return isChild and (not predicate or predicate(descendant))
@@ -134,7 +87,7 @@ function Core.Dependency<T>(dependency: T)
 	return dependency
 end
 
-function Core.Register<T>(members: T & object, dependencies: { object }?, priority: number?): T
+function Core.Register<T>(members: T, dependencies: { any }?, priority: number?): T
 	local id = Reflect.GetId(members)
 	local _priority = if typeof(priority) == "number" then priority else DEFAULT_PRIORITY
 	local _dependencies = if typeof(dependencies) == "table" then dependencies else {}
@@ -171,7 +124,7 @@ function Core.Ignite()
 	if IsIgnited or HasShutdown then return end
 
 	local providerIds: { string } = {}
-	local metadata: { [string]: { id: string, priority: number, provider: object } } = {}
+	local metadata: { [string]: { id: string, priority: number, provider: Types.Object } } = {}
 	for _, provider in Singletons do
 		local id = Reflect.GetId(provider)
 		local priority = Reflect.ReadMetadata(provider, "priority") :: number
@@ -180,11 +133,11 @@ function Core.Ignite()
 		providerIds[#providerIds + 1] = id
 	end
 
-	local start = Modding.GetListeners("OnStart") :: { OnStart }?
-	local init = Modding.GetListeners("OnInit") :: { OnInit }?
-	local stop = Modding.GetListeners("OnStop") :: { OnStop }?
-
 	local sortedProviders = topologicalSort(providerIds)
+
+	local start = Modding.GetListeners("OnStart") :: { Types.OnStart }?
+	local init = Modding.GetListeners("OnInit") :: { Types.OnInit }?
+	local stop = Modding.GetListeners("OnStop") :: { Types.OnStop }?
 
 	local function sort(a, b)
 		local aPriority = Reflect.ReadMetadata(a, "priority") :: number
@@ -195,12 +148,10 @@ function Core.Ignite()
 		local aId = Reflect.GetId(a)
 		local bId = Reflect.GetId(b)
 
-		return sortedProviders[aId] > sortedProviders[bId]
+		return sortedProviders[aId] < sortedProviders[bId]
 	end
 
-	if start then table.sort(start, sort) end
-
-	if stop then table.sort(stop, sort) end
+	IsIgnited = true
 
 	if init then
 		table.sort(init, sort)
@@ -212,21 +163,23 @@ function Core.Ignite()
 		end
 	end
 
-	IsIgnited = true
-
 	if start then
+		table.sort(start, sort)
+
 		for _, listener in start do
 			task.spawn(listener.OnStart, listener)
 		end
 	end
 
-	Lifecycles.IsIgnited = true
+	if stop then table.sort(stop, sort) end
 
-	for _, manager in Lifecycles.PendingManagers do
+	Lifecycles._IsIgnited = true
+
+	for _, manager in Lifecycles._PendingManagers do
 		task.spawn(manager)
 	end
 
-	table.clear(Lifecycles.PendingManagers)
+	table.clear(Lifecycles._PendingManagers)
 
 	return function()
 		if HasShutdown then return end
@@ -240,7 +193,5 @@ function Core.Ignite()
 		HasShutdown = true
 	end
 end
-
-Core.Extend = (extend :: any) :: extender
 
 return Core

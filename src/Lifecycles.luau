@@ -1,9 +1,10 @@
 local RunService = game:GetService("RunService")
+local Types = require(script.Parent.Types)
 local Modding = require("./Modding")
 
-local Lifecycles = {}
-Lifecycles.PendingManagers = {}
-Lifecycles.IsIgnited = false
+local Lifecycles = {} :: Types.PrivateLifecycles
+Lifecycles._PendingManagers = {}
+Lifecycles._IsIgnited = false
 
 function Lifecycles.CreateClientLifecycle(name: string, manager: (fire: () -> ()) -> ())
 	if RunService:IsServer() then return end
@@ -32,10 +33,10 @@ function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -
 		end
 	end
 
-	if Lifecycles.IsIgnited then
+	if Lifecycles._IsIgnited then
 		manager(fire)
 	else
-		Lifecycles.PendingManagers[#Lifecycles.PendingManagers + 1] = function()
+		Lifecycles._PendingManagers[#Lifecycles._PendingManagers + 1] = function()
 			manager(fire)
 		end
 	end
@@ -46,4 +47,4 @@ function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -
 	end
 end
 
-return Lifecycles
+return Lifecycles :: Types.Lifecycles

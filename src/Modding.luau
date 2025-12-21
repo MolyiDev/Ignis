@@ -1,37 +1,27 @@
 local Signal = require(script.Parent.Signal)
-
-type object = {}
-type set<T> = { [T]: true }
-type listener = {
-	eventIds: set<string>,
-	involvement: { set<object> },
-}
-
-type signal<T...> = Signal.Signal<T...>
-type ListenerAddedEvent = signal<object>
-type ListenerRemovedEvent = signal<object>
+local Types = require(script.Parent.Types)
 
 local Modding = {}
-local LifecycleListeners = {} :: { [string]: set<object> }
-local ListenerAdded = Signal.new() :: ListenerAddedEvent
-local ListenerRemoved = Signal.new() :: ListenerRemovedEvent
-local ListenerAddedEvents = {} :: { [string]: ListenerAddedEvent }
-local ListenerRemovedEvents = {} :: { [string]: ListenerRemovedEvent }
-local Listeners = {} :: { [object]: listener }
+local LifecycleListeners = {} :: { [string]: Types.Set<Types.Object> }
+local ListenerAdded = Signal.new() :: Types.ListenerAddedEvent
+local ListenerRemoved = Signal.new() :: Types.ListenerRemovedEvent
+local ListenerAddedEvents = {} :: { [string]: Types.ListenerAddedEvent }
+local ListenerRemovedEvents = {} :: { [string]: Types.ListenerRemovedEvent }
+local Listeners = {} :: { [Types.Object]: Types.Listener }
 
-function Modding.AddListener(object: object, ignoreList: { string }?)
+function Modding.AddListener<T>(object: T, ignoreList: { string }?)
 	if typeof(object) ~= "table" then error("[Framework.Modding]: object must be a table", 2) end
 
-	local listener: listener = {
-		eventIds = {},
-		involvement = {},
+	local listener: Types.Listener = {
+		EventIds = {},
+		Involvement = {},
 	}
 
 	for lifecycleEvent, callback in object do
 		if typeof(lifecycleEvent) ~= "string" then continue end
 		if typeof(callback) ~= "function" then continue end
 		if ignoreList and table.find(ignoreList, lifecycleEvent) then continue end
-		if listener.eventIds[lifecycleEvent] then continue end
+		if listener.EventIds[lifecycleEvent] then continue end
 
 		local lifecycleListener = LifecycleListeners[lifecycleEvent]
 		if not lifecycleListener then
@@ -40,8 +30,8 @@ function Modding.AddListener(object: object, ignoreList: { string }?)
 		end
 
 		lifecycleListener[object] = true
-		listener.eventIds[lifecycleEvent] = true
-		listener.involvement[#listener.involvement + 1] = lifecycleListener
+		listener.EventIds[lifecycleEvent] = true
+		listener.Involvement[#listener.Involvement + 1] = lifecycleListener
 
 		local eventSignal = ListenerAddedEvents[lifecycleEvent]
 		if eventSignal then eventSignal:fire(object) end
@@ -51,15 +41,15 @@ function Modding.AddListener(object: object, ignoreList: { string }?)
 	ListenerAdded:fire(object)
 end
 
-function Modding.RemoveListener(object: object)
+function Modding.RemoveListener(object: Types.Object)
 	local listener = Listeners[object]
 	if not listener then error("[Framework.Modding]: given object is not a listener", 2) end
 
-	for _, set in listener.involvement do
+	for _, set in listener.Involvement do
 		set[object] = nil
 	end
 
-	for id in listener.eventIds do
+	for id in listener.EventIds do
 		local eventSignal = ListenerRemovedEvents[id]
 		if not eventSignal then continue end
 		eventSignal:fire(object)
@@ -80,7 +70,7 @@ function Modding.AddLifecycleListener(name: string, callback: (...any) -> ())
 	end
 end
 
-function Modding.GetListeners(id: string): { object }?
+function Modding.GetListeners(id: string): { Types.Object }?
 	local listeners = LifecycleListeners[id]
 	if not listeners then return nil end
 
@@ -91,7 +81,7 @@ function Modding.GetListeners(id: string): { object }?
 	return results
 end
 
-function Modding.OnListenerAdded(callback: (object: object) -> (), id: string?)
+function Modding.OnListenerAdded(callback: (object: Types.Object) -> (), id: string?)
 	if id ~= nil then
 		local existingListeners = LifecycleListeners[id]
 		if existingListeners then
@@ -116,7 +106,7 @@ function Modding.OnListenerAdded(callback: (object: object) -> (), id: string?)
 	end
 end
 
-function Modding.OnListenerRemoved(callback: (object: object) -> (), id: string?)
+function Modding.OnListenerRemoved(callback: (object: Types.Object) -> (), id: string?)
 	if id ~= nil then
 		local event = ListenerRemovedEvents[id]
 		if not event then
