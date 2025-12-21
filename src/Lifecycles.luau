@@ -19,6 +19,7 @@ function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -
 	local addedConnection = Modding.OnListenerAdded(function(listener)
 		listeners[listener] = true
 	end, name)
+
 	local removedConnection = Modding.OnListenerRemoved(function(listener)
 		listeners[listener] = nil
 	end, name)
