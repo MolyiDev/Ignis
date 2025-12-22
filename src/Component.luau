@@ -77,7 +77,7 @@ function Component.AddComponent(instance: Instance, component: Types.Component)
 	ActiveComponents[instance][component] = object
 	Modding.AddListener(object, { "onInit", "onStart", "onStop" })
 
-	Component.OnComponentAdded:fire(object, instance)
+	Component.OnComponentAdded:Fire(object, instance)
 end
 
 function Component.RemoveComponent(instance: Instance, component: Types.Component)
@@ -93,7 +93,7 @@ function Component.RemoveComponent(instance: Instance, component: Types.Componen
 	ActiveComponents[instance][component] = nil
 	Modding.RemoveListener(object)
 
-	Component.OnComponentRemoved:fire(object, instance)
+	Component.OnComponentRemoved:Fire(object, instance)
 end
 
 function Component.ClearAllComponents(instance: Instance)

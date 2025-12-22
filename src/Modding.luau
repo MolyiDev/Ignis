@@ -34,11 +34,11 @@ function Modding.AddListener<T>(object: T, ignoreList: { string }?)
 		listener.Involvement[#listener.Involvement + 1] = lifecycleListener
 
 		local eventSignal = ListenerAddedEvents[lifecycleEvent]
-		if eventSignal then eventSignal:fire(object) end
+		if eventSignal then eventSignal:Fire(object) end
 	end
 
 	Listeners[object] = listener
-	ListenerAdded:fire(object)
+	ListenerAdded:Fire(object)
 end
 
 function Modding.RemoveListener(object: Types.Object)
@@ -52,11 +52,11 @@ function Modding.RemoveListener(object: Types.Object)
 	for id in listener.EventIds do
 		local eventSignal = ListenerRemovedEvents[id]
 		if not eventSignal then continue end
-		eventSignal:fire(object)
+		eventSignal:Fire(object)
 	end
 
 	Listeners[object] = nil
-	ListenerRemoved:fire(object)
+	ListenerRemoved:Fire(object)
 end
 
 function Modding.AddLifecycleListener(name: string, callback: (...any) -> ())
@@ -96,13 +96,13 @@ function Modding.OnListenerAdded(callback: (object: Types.Object) -> (), id: str
 			ListenerAddedEvents[id] = event
 		end
 
-		return event:connect(callback)
+		return event:Connect(callback)
 	else
 		for object in Listeners do
 			task.spawn(callback, object)
 		end
 
-		return ListenerAdded:connect(callback)
+		return ListenerAdded:Connect(callback)
 	end
 end
 
@@ -114,9 +114,9 @@ function Modding.OnListenerRemoved(callback: (object: Types.Object) -> (), id: s
 			ListenerRemovedEvents[id] = event
 		end
 
-		return event:connect(callback)
+		return event:Connect(callback)
 	else
-		return ListenerRemoved:connect(callback)
+		return ListenerRemoved:Connect(callback)
 	end
 end
 

@@ -1,259 +1,289 @@
 --!native
 --!optimize 2
 
---[=[
-    another luau signal implementation
+export type Connection = {
+	Connected: boolean,
+	Disconnect: (self: Connection) -> (),
+	Reconnect: (self: Connection) -> (),
+}
 
-    author: glaphyre
-]=]
-local shingo = {}
-shingo.__index = shingo
+type PrivateConnection = Connection & {
+	Priority: number,
+	VarArgs: { any }?,
+	Signal: any,
+	Next: PrivateConnection?,
+	Previous: PrivateConnection?,
+	Callback: (...any) -> (),
+}
 
---[=[
-    a connection object that represents a relation between a signal and a callback
-    ```lua
-    local connection = signal:connect(function(...): ()
-        --// ...
-    end)
+export type Signal<T...> = {
+	Connect: <U...>(self: Signal<T...>, fn: (T...) -> (), U...) -> Connection,
+	ConnectPriority: <U...>(self: Signal<T...>, priority: number, fn: (T...) -> (), U...) -> Connection,
+	Once: <U...>(self: Signal<T...>, fn: (T...) -> (), U...) -> Connection,
+	OncePriority: <U...>(self: Signal<T...>, priority: number, fn: (T...) -> (), U...) -> Connection,
+	Wait: (self: Signal<T...>) -> T...,
+	WaitPriority: (self: Signal<T...>, priority: number) -> T...,
+	Fire: (self: Signal<T...>, T...) -> (),
+	DisconnectAll: (self: Signal<T...>) -> (),
+	Destroy: (self: Signal<T...>) -> (),
+}
 
-    --// disconnect the connection, stops the callback from running when fired
-    connection:disconnect()
-    ```
-]=]
-local connection = {}
-connection.__index = connection
+type PrivateSignal<T...> = Signal<T...> & {
+	Head: PrivateConnection?,
+	IsFiring: boolean,
+	IsProcessing: boolean,
+	FiringQueue: { { [number]: unknown } },
+	ProcessingQueue: { PrivateConnection },
+}
 
-export type Connection<T... = ()> = typeof(setmetatable(
-	{} :: {
-		signal: Signal<T...>,
-		next: Connection<T...>?,
-		previous: Connection<T...>?,
-		connected: boolean,
-		callback: (T...) -> ()?,
-	},
-	{} :: typeof(connection)
-))
+local DEFAULT_PRIORITY = 0
 
---[=[
-    disconnects the given connection from the signal
-    ```lua
-    -- stops the connected callback from running
-    connection:disconnect()
-    ```
-]=]
-function connection.disconnect<T...>(self: Connection<T...>)
-	self.connected = false
-	self.callback = nil
-	if self.previous then self.previous.next = self.next end
-	if self.next then self.next.previous = self.previous end
-	local signal = self.signal
-	if signal.head == self then signal.head = self.next end
+local table_clear = table.clear
+local table_unpack = table.unpack
+local coroutine_create = coroutine.create
+local coroutine_yield = coroutine.yield
+local coroutine_resume = coroutine.resume
+local coroutine_status = coroutine.status
+local coroutine_running = coroutine.running
+local task_spawn = task.spawn
+
+local SignalStatic = {}
+local Signal = {}
+Signal.__index = Signal
+
+function Signal:__tostring()
+	return "Signal"
 end
 
---[=[
-    a signal object to which callbacks can connect to
-    ```lua
-    --// creates a new signal object
-    local my_signal = signal.new()
-    ```
-]=]
-local signal = {}
-signal.__index = signal
+local Connection = {}
+Connection.__index = Connection
 
-export type Signal<T... = ()> = typeof(setmetatable(
-	{} :: {
-		head: Connection<T...>?,
-		is_firing: boolean,
-		is_processing: boolean,
-		firing_queue: { { [number]: unknown } },
-		processing_queue: { Connection<T...>? },
-	},
-	{} :: typeof(signal)
-))
+local function insertConnection<T...>(self: PrivateSignal<T...>, cn: PrivateConnection)
+	local head = self.Head
+	local priority = cn.Priority
 
-local function link_connection_node<T...>(self: Signal<T...>, connection: Connection<T...>)
-	local current = self.head
-	connection.next = current
-	if current then current.previous = connection end
-	self.head = connection
+	if not head or priority >= head.Priority then
+		cn.Next = head
+		if head then head.Previous = cn end
+		self.Head = cn
+		cn.Previous = nil
+		return
+	end
+
+	local current = head
+	while current.Next and current.Next.Priority > priority do
+		current = current.Next
+	end
+
+	local nextNode = current.Next
+
+	current.Next = cn
+	cn.Previous = current
+	cn.Next = nextNode
+
+	if nextNode then nextNode.Previous = cn end
 end
 
-local function process_fire_queue<T...>(self: Signal<T...>)
-	if self.is_processing then return end
-	self.is_processing = true
+local function disconnect(self: PrivateConnection)
+	if not self.Connected then return end
+	self.Connected = false
 
-	local queue = self.firing_queue
-	while #queue > 0 do
-		self.is_firing = true
-		local args = table.remove(queue, 1) :: { [number]: unknown }
-		local current = self.head
-		while current do
-			task.spawn(current.callback, table.unpack(args))
-			current = current.next
+	local next = self.Next
+	local prev = self.Previous
+
+	if next then next.Previous = prev end
+	if prev then prev.Next = next end
+
+	local signal = self.Signal
+	if signal.Head == self then signal.Head = next end
+end
+
+local freeThreads: { thread } = {}
+
+local function runCallback(callback, thread, ...)
+	callback(...)
+	freeThreads[#freeThreads + 1] = thread
+end
+
+local function yielder()
+	while true do
+		runCallback(coroutine.yield())
+	end
+end
+
+local function processFireQueue<T...>(self: PrivateSignal<T...>)
+	if self.IsProcessing then return end
+	self.IsProcessing = true
+
+	while #self.FiringQueue > 0 do
+		local queue = self.FiringQueue
+		self.FiringQueue = {}
+
+		for i = 1, #queue do
+			local args = queue[i] :: { any }
+			local cn = self.Head
+
+			while cn do
+				if cn.Connected then
+					local thread
+					if #freeThreads > 0 then
+						thread = freeThreads[#freeThreads]
+						freeThreads[#freeThreads] = nil
+					else
+						thread = coroutine_create(yielder)
+						coroutine_resume(thread)
+					end
+
+					if not cn.VarArgs then
+						task_spawn(thread, cn.Callback, thread, table_unpack(args))
+					else
+						local callArgs = cn.VarArgs
+						local len = #callArgs
+						local count = len
+						for _, value in args do
+							count += 1
+							callArgs[count] = value
+						end
+
+						task_spawn(thread, cn.Callback, thread, table_unpack(callArgs))
+
+						for k = count, len + 1, -1 do
+							callArgs[k] = nil
+						end
+					end
+				end
+				cn = cn.Next
+			end
 		end
-		self.is_firing = false
-		for _, connection in self.processing_queue do
-			link_connection_node(self, connection)
+
+		local processingQueue = self.ProcessingQueue
+		for i = 1, #processingQueue do
+			insertConnection(self, processingQueue[i])
 		end
-		table.clear(self.processing_queue)
+
+		table_clear(processingQueue)
 	end
-	table.clear(self.firing_queue)
-	self.is_processing = false
+
+	self.IsProcessing = false
 end
 
---[=[
-    @within Signal
-    fires the signal with the given arguments
+local function connect<T...>(self: PrivateSignal<T...>, priority: number, fn: (...any) -> (), ...: any): PrivateConnection
+	local varargs = { ... }
+	local cn = (
+		setmetatable({
+			Connected = true,
+			Priority = priority,
+			VarArgs = if #varargs == 0 then nil else varargs,
+			Signal = self,
+			Next = false,
+			Previous = false,
+			Callback = fn,
+		}, Connection) :: any
+	) :: PrivateConnection
 
-    @param ... the arguments to be fired with
-]=]
-function signal.fire<T...>(self: Signal<T...>, ...: T...)
-	assert(self.firing_queue, "signal is destroyed")
-
-	local argument_pack = table.pack(...)
-	argument_pack.n = nil
-	table.insert(self.firing_queue, argument_pack)
-	process_fire_queue(self)
-end
-
---[=[
-    @within Signal
-    connects a callback to the signal
-
-    ```lua
-    --// returns a connection object which can later be disconnected
-    signal:connect(function(...): ()
-        print("signal was fired!")
-    end)
-
-    signal:fire() --// signal was fired!
-    signal:fire() --// signal was fired!
-    ```
-
-    @param callback the function to be connected
-    @return `Connection<T...>`
-]=]
-function signal.connect<T...>(self: Signal<T...>, callback: (T...) -> ())
-	local connection: Connection<T...> = setmetatable({
-		signal = self,
-		connected = false,
-		callback = callback,
-	}, connection)
-	if self.is_firing then
-		table.insert(self.processing_queue, connection)
-		return connection
+	if self.IsFiring then
+		self.ProcessingQueue[#self.ProcessingQueue + 1] = cn
+	else
+		insertConnection(self, cn)
 	end
-	link_connection_node(self, connection)
-	return connection
+
+	return cn
 end
 
---[=[
-    @within Signal
-    connects a callback to the signal which will only run once
-
-    ```lua
-    signal:once(function(...): ()
-        print("this will only run once!")
-    end)
-
-    signal:fire() --// this will only run once!
-    signal:fire() --// prints nothing
-    ```
-
-    @param callback the function to be connected
-    @return `Connection<T...>`
-]=]
-function signal.once<T...>(self: Signal<T...>, callback: (T...) -> ()): Connection<T...>
-	local connection: Connection<T...>
-	connection = signal.connect(self, function(...)
-		connection:disconnect()
-		callback(...)
-	end)
-	return connection
-end
-
---[=[
-    @within Signal
-    
-    yields the current thread until the signal is fired.
-    ```lua
-    local number = my_signal:wait() --// Signal<number>
-    print(`i waited and i got {number}!`)
-    ```
-    
-    @return `...: T...`
-]=]
-function signal.wait<T...>(self: Signal<T...>): T...
-	local thread = coroutine.running()
-	local connection: Connection<T...>
-	connection = signal.connect(self, function(...)
-		connection:disconnect()
-		task.spawn(thread, ...)
-	end)
-	return coroutine.yield()
-end
-
---[=[
-    @within Signal
-
-    disconnects all connections and makes it unusable
-    ```lua
-    signal:destroy()
-    signal:fire() --// error: signal is destroyed
-    ```
-]=]
-function signal.destroy<T...>(self: Signal<T...>): ()
-	local current = self.head
-	while current do
-		current:disconnect()
-		current = current.next
-	end
-	table.clear(self.firing_queue)
-	table.clear(self.processing_queue)
-	self.head = nil
-	self.firing_queue = nil :: any
-end
-
---[=[
-    checks whether the given value is a signal
-
-    @param value the value to be checked
-
-    @return true iff value is a signal, false otherwise
-]=]
-local function is_signal(value: any): boolean
-	return (type(value) == "table" and getmetatable(value) == signal)
-end
-
-shingo.is_signal = is_signal
-
---[=[
-    checks whether the given value is a connection
-
-    @param value the value to be checked
-
-    @return true iff value is a connection, false otherwise
-]=]
-local function is_connection(value: any): boolean
-	return (type(value) == "table" and getmetatable(value) == connection)
-end
-
-shingo.is_connection = is_connection
-
---[=[
-    creates a new signal
-
-    @return `Signal<T...>`
-]=]
-function shingo.new<T...>(): Signal<T...>
+function SignalStatic.new<T...>(): Signal<T...>
 	local self = setmetatable({
-		head = nil,
-		is_firing = false,
-		is_processing = false,
-		firing_queue = {},
-		processing_queue = {},
-	}, signal)
-	return self
+		Head = false,
+		IsFiring = false,
+		IsProcessing = false,
+		FiringQueue = {},
+		ProcessingQueue = {},
+	}, Signal)
+
+	return (self :: any) :: Signal<T...>
 end
 
-return shingo
+function SignalStatic.IsConnection(obj: any): boolean
+	return (type(obj) == "table" and getmetatable(obj) == Connection)
+end
+
+function Signal.Connect<T...>(self: PrivateSignal<T...>, fn: (...any) -> (), ...: any): Connection
+	return connect(self, DEFAULT_PRIORITY, fn, ...)
+end
+
+Signal.ConnectPriority = connect
+
+function Signal.Once<T...>(self: PrivateSignal<T...>, fn: (...any) -> (), ...: any): Connection
+	local cn
+
+	cn = connect(self, DEFAULT_PRIORITY, function(...)
+		disconnect(cn)
+		fn(...)
+	end, ...)
+
+	return cn
+end
+
+function Signal.OncePriority<T...>(self: PrivateSignal<T...>, priority: number, fn: (...any) -> (), ...: any): Connection
+	local cn
+
+	cn = connect(self, priority, function(...)
+		disconnect(cn)
+		fn(...)
+	end, ...)
+
+	return cn
+end
+
+function Signal.Wait<T...>(self: PrivateSignal<T...>): ...any
+	local thread = coroutine_running()
+	local cn
+
+	cn = connect(self, DEFAULT_PRIORITY, function(...)
+		disconnect(cn)
+		if coroutine_status(thread) == "suspended" then task_spawn(thread, ...) end
+	end)
+
+	return coroutine_yield()
+end
+
+function Signal.WaitPriority<T...>(self: PrivateSignal<T...>, priority: number): ...any
+	local thread = coroutine_running()
+	local cn
+
+	cn = connect(self, priority, function(...)
+		disconnect(cn)
+		if coroutine_status(thread) == "suspended" then task_spawn(thread, ...) end
+	end)
+
+	return coroutine_yield()
+end
+
+function Signal.Fire<T...>(self: PrivateSignal<T...>, ...: any)
+	self.FiringQueue[#self.FiringQueue + 1] = { ... }
+	processFireQueue(self)
+end
+
+function Signal.DisconnectAll<T...>(self: PrivateSignal<T...>)
+	local cn = self.Head
+	while cn do
+		disconnect(cn)
+		cn = cn.Next
+	end
+end
+
+function Signal.Destroy<T...>(self: PrivateSignal<T...>)
+	self:DisconnectAll()
+	table_clear(self)
+	setmetatable(self, nil)
+end
+
+function Connection.Reconnect(self: PrivateConnection)
+	if self.Connected then return end
+	self.Connected = true
+
+	insertConnection(self.Signal, self)
+end
+
+Connection.Disconnect = disconnect
+
+return SignalStatic
