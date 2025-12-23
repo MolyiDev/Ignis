@@ -4,6 +4,7 @@ local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
 
 local DEFAULT_PRIORITY = 0
+
 local Core = {}
 Core.DefaultLifecycles = {
 	OnInit = "OnInit",
@@ -70,18 +71,20 @@ end
 
 function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Instance>?)
 	for _, descendant in parent:GetDescendants() do
-		if predicate and not predicate(descendant) then continue end
 		if not descendant:IsA("ModuleScript") then continue end
+		if predicate and not predicate(descendant) then continue end
 
 		saferequire(descendant)
 	end
 end
 
 function Core.LoadChildren(parent: Instance, predicate: Types.Predicate<Instance>?)
-	Core.LoadDescendants(parent, function(descendant: Instance)
-		local isChild = descendant.Parent == parent
-		return isChild and (not predicate or predicate(descendant))
-	end)
+	for _, child in parent:GetChildren() do
+		if not child:IsA("ModuleScript") then continue end
+		if predicate and not predicate(child) then continue end
+
+		saferequire(child)
+	end
 end
 
 function Core.Dependency<T>(dependency: T)
