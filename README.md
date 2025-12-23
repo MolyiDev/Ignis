@@ -1,7 +1,5 @@
 # Flux
 
-A lightweight, strict Luau framework for Roblox.
-
 ## Installation
 
 ```bash

@@ -1,10 +1,16 @@
 local Types = require(script.Parent.Types)
 
 local Reflect = {}
-local Metadata: { [string]: { [string]: unknown } } = {}
-local Registry: { [string]: unknown } = {}
+Reflect.Enum = table.freeze({
+	IsSingleton = 0,
+	Priority = 1,
+	Dependencies = 2,
+	Source = 3,
+})
+local Metadata: { [number]: Types.Metadata } = {}
+local Registry: { [number]: unknown } = {}
 
-local function hash(data: unknown): string
+local function hash(data: unknown): number
 	local str = tostring(data)
 	local hash = 5381
 
@@ -13,10 +19,10 @@ local function hash(data: unknown): string
 		hash = (bit32.lshift(hash, 5) + hash) + c
 	end
 
-	return `reflect:{bit32.bxor(hash, 0)}`
+	return bit32.bxor(hash, 0)
 end
 
-function Reflect.GetId<T>(object: T): string
+function Reflect.GetId<T>(object: T): number
 	return hash(object)
 end
 
@@ -37,12 +43,12 @@ function Reflect.GetMetadata<T>(object: T): Types.Metadata
 	return Metadata[id]
 end
 
-function Reflect.ReadMetadata<T>(object: T, key: string): unknown
+function Reflect.ReadMetadata<T>(object: T, key: number): unknown
 	local metadata = Reflect.GetMetadata(object)
 	return metadata[key]
 end
 
-function Reflect.DefineMetadata<T>(object: T, key: string, value: unknown)
+function Reflect.SetMetadata<T>(object: T, key: number, value: unknown)
 	local metadata = Reflect.GetMetadata(object)
 	metadata[key] = value
 end

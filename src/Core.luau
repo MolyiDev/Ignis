@@ -3,10 +3,20 @@ local Lifecycles = require(script.Parent.Lifecycles) :: Types.PrivateLifecycles
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
 
-local DEFAULT_PRIORITY = 1
+local DEFAULT_PRIORITY = 0
 local Core = {}
+Core.DefaultLifecycles = {
+	OnInit = "OnInit",
+	OnStart = "OnStart",
+	OnStop = "OnStop",
+}
 
-local Singletons: { [string]: any } = {}
+local _, fireSyncInit = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnInit)
+local fireStart = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnStart)
+local fireStop = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnStop)
+
+local Singletons: { [number]: any } = {}
+local Priorities: { [number]: number } = {}
 local PendingDependencies: { [string]: Types.Object } = {}
 local IsIgnited = false
 local HasShutdown = false
@@ -16,12 +26,12 @@ local function saferequire(module: ModuleScript): unknown
 	return success and result
 end
 
-local function topologicalSort(objects: { string }): { [string]: number }
+local function topologicalSort(objects: { number }): { [number]: number }
 	local currentSize = 0
-	local sorted: { [string]: number } = {}
-	local visited: { [string]: true } = {}
+	local sorted: { [number]: number } = {}
+	local visited: { [number]: boolean } = {}
 
-	local function visitor(node: string)
+	local function visitor(node: number)
 		if visited[node] then return end
 		visited[node] = true
 
@@ -30,13 +40,13 @@ local function topologicalSort(objects: { string }): { [string]: number }
 
 		local function processDependency(dependency: any)
 			if typeof(dependency) ~= "table" then return end
-			if Reflect.ReadMetadata(dependency, "singleton") == nil then return end
+			if not Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then return end
 
 			local id = Reflect.GetId(dependency)
 			visitor(id)
 		end
 
-		local dependencies = Reflect.ReadMetadata(object, "dependencies") :: { Types.Object }
+		local dependencies = Reflect.ReadMetadata(object, Reflect.Enum.Dependencies) :: { Types.Object }
 		if dependencies then
 			for _, dependency in dependencies do
 				processDependency(dependency)
@@ -89,7 +99,7 @@ end
 
 function Core.Register<T>(members: T, dependencies: { any }?, priority: number?): T
 	local id = Reflect.GetId(members)
-	local _priority = if typeof(priority) == "number" then priority else DEFAULT_PRIORITY
+	local _priority = if typeof(priority) == "number" then priority else nil
 	local _dependencies = if typeof(dependencies) == "table" then dependencies else {}
 
 	local source = debug.info(2, "s")
@@ -102,11 +112,10 @@ function Core.Register<T>(members: T, dependencies: { any }?, priority: number?)
 		PendingDependencies[source] = nil
 	end
 
-	Reflect.DefineMetadata(members, "singleton", true)
-	Reflect.DefineMetadata(members, "priority", _priority)
-	Reflect.DefineMetadata(members, "dependencies", _dependencies)
-
-	Modding.AddListener(members)
+	Reflect.SetMetadata(members, Reflect.Enum.IsSingleton, true)
+	Reflect.SetMetadata(members, Reflect.Enum.Priority, _priority)
+	Reflect.SetMetadata(members, Reflect.Enum.Dependencies, _dependencies)
+	Reflect.SetMetadata(members, Reflect.Enum.Source, source)
 
 	Singletons[id] = members
 	return members
@@ -120,58 +129,36 @@ function Core.HasShutdown()
 	return HasShutdown
 end
 
+function Core.GetPriority(): number
+	local source = debug.info(2, "s")
+	return Priorities[source] or DEFAULT_PRIORITY
+end
+
 function Core.Ignite()
 	if IsIgnited or HasShutdown then return end
 
-	local providerIds: { string } = {}
-	local metadata: { [string]: { id: string, priority: number, provider: Types.Object } } = {}
-	for _, provider in Singletons do
-		local id = Reflect.GetId(provider)
-		local priority = Reflect.ReadMetadata(provider, "priority") :: number
-
-		metadata[id] = { id = id, priority = priority, provider = provider }
+	local providerIds: { number } = {}
+	for id, _ in Singletons do
 		providerIds[#providerIds + 1] = id
 	end
 
-	local sortedProviders = topologicalSort(providerIds)
+	local sortedIds = topologicalSort(providerIds)
 
-	local start = Modding.GetListeners("OnStart") :: { Types.OnStart }?
-	local init = Modding.GetListeners("OnInit") :: { Types.OnInit }?
-	local stop = Modding.GetListeners("OnStop") :: { Types.OnStop }?
+	for _, singleton in Singletons do
+		local id = Reflect.GetId(singleton)
+		local priority = (
+			Reflect.ReadMetadata(singleton, Reflect.Enum.Priority)
+			or sortedIds[id]
+			or DEFAULT_PRIORITY
+		) :: number
 
-	local function sort(a, b)
-		local aPriority = Reflect.ReadMetadata(a, "priority") :: number
-		local bPriority = Reflect.ReadMetadata(b, "priority") :: number
+		Reflect.SetMetadata(singleton, Reflect.Enum.Priority, priority)
 
-		if aPriority ~= bPriority then return aPriority > bPriority end
+		local source = Reflect.ReadMetadata(singleton, Reflect.Enum.Source) :: number
+		if source then Priorities[source] = priority end
 
-		local aId = Reflect.GetId(a)
-		local bId = Reflect.GetId(b)
-
-		return sortedProviders[aId] < sortedProviders[bId]
+		Modding.AddListener(singleton)
 	end
-
-	IsIgnited = true
-
-	if init then
-		table.sort(init, sort)
-
-		for _, listener in init do
-			xpcall(listener.OnInit, function(result)
-				warn(`[Flux]: Error in onInit listener: {result}`)
-			end, listener)
-		end
-	end
-
-	if start then
-		table.sort(start, sort)
-
-		for _, listener in start do
-			task.spawn(listener.OnStart, listener)
-		end
-	end
-
-	if stop then table.sort(stop, sort) end
 
 	Lifecycles._IsIgnited = true
 
@@ -181,14 +168,16 @@ function Core.Ignite()
 
 	table.clear(Lifecycles._PendingManagers)
 
+	fireSyncInit()
+
+	fireStart()
+
+	IsIgnited = true
+
 	return function()
 		if HasShutdown then return end
 
-		if stop then
-			for _, listener in stop do
-				task.spawn(listener.OnStop, listener)
-			end
-		end
+		fireStop()
 
 		HasShutdown = true
 	end
