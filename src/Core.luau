@@ -22,40 +22,27 @@ local PendingDependencies: { [string]: Types.Object } = {}
 local IsIgnited = false
 local HasShutdown = false
 
-local function saferequire(module: ModuleScript): unknown
-	local success, result = pcall(require, module)
-	return success and result
-end
-
-local function topologicalSort(objects: { number }): { [number]: number }
+local function topologicalSort(objects: { any }): { [any]: number }
 	local currentSize = 0
-	local sorted: { [number]: number } = {}
-	local visited: { [number]: boolean } = {}
+	local sorted: { [any]: number } = {}
+	local visited: { [any]: boolean } = {}
 
-	local function visitor(node: number)
+	local function visitor(node: any)
 		if visited[node] then return end
 		visited[node] = true
 
-		local object = Singletons[node]
-		if not object then return end
+		local dependencies = Reflect.ReadMetadata(node, Reflect.Enum.Dependencies) :: { Types.Object }
 
-		local function processDependency(dependency: any)
-			if typeof(dependency) ~= "table" then return end
-			if not Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then return end
-
-			local id = Reflect.GetId(dependency)
-			visitor(id)
-		end
-
-		local dependencies = Reflect.ReadMetadata(object, Reflect.Enum.Dependencies) :: { Types.Object }
 		if dependencies then
 			for _, dependency in dependencies do
-				processDependency(dependency)
+				if Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then visitor(dependency) end
 			end
 		end
 
-		for _, dependency in object do
-			processDependency(dependency)
+		for _, dependency in node do
+			if typeof(dependency) == "table" and Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then
+				visitor(dependency)
+			end
 		end
 
 		currentSize += 1
@@ -74,7 +61,7 @@ function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Insta
 		if not descendant:IsA("ModuleScript") then continue end
 		if predicate and not predicate(descendant) then continue end
 
-		saferequire(descendant)
+		require(descendant)
 	end
 end
 
@@ -83,7 +70,7 @@ function Core.LoadChildren(parent: Instance, predicate: Types.Predicate<Instance
 		if not child:IsA("ModuleScript") then continue end
 		if predicate and not predicate(child) then continue end
 
-		saferequire(child)
+		require(child)
 	end
 end
 
@@ -101,26 +88,25 @@ function Core.Dependency<T>(dependency: T)
 end
 
 function Core.Register<T>(members: T, dependencies: { any }?, priority: number?): T
-	local id = Reflect.GetId(members)
-	local _priority = if typeof(priority) == "number" then priority else nil
-	local _dependencies = if typeof(dependencies) == "table" then dependencies else {}
+	priority = if typeof(priority) == "number" then priority else nil
+	dependencies = if typeof(dependencies) == "table" then dependencies else {}
 
 	local source = debug.info(2, "s")
 	local pending = PendingDependencies[source]
 	if pending then
 		for _, dep in pending do
-			_dependencies[#_dependencies + 1] = dep
+			dependencies[#dependencies + 1] = dep
 		end
 
 		PendingDependencies[source] = nil
 	end
 
 	Reflect.SetMetadata(members, Reflect.Enum.IsSingleton, true)
-	Reflect.SetMetadata(members, Reflect.Enum.Priority, _priority)
-	Reflect.SetMetadata(members, Reflect.Enum.Dependencies, _dependencies)
+	Reflect.SetMetadata(members, Reflect.Enum.Priority, priority)
+	Reflect.SetMetadata(members, Reflect.Enum.Dependencies, dependencies)
 	Reflect.SetMetadata(members, Reflect.Enum.Source, source)
 
-	Singletons[id] = members
+	Singletons[#Singletons + 1] = members
 	return members
 end
 
@@ -141,18 +127,12 @@ function Core.Ignite()
 	if IsIgnited then error("[Flux] Cannot ignite framework twice.", 2) end
 	if HasShutdown then error("[Flux] Framework is shutdown; cannot re-ignite.", 2) end
 
-	local providerIds: { number } = {}
-	for id, _ in Singletons do
-		providerIds[#providerIds + 1] = id
-	end
-
-	local sortedIds = topologicalSort(providerIds)
+	local sortedIds = topologicalSort(Singletons)
 
 	for _, singleton in Singletons do
-		local id = Reflect.GetId(singleton)
 		local priority = (
 			Reflect.ReadMetadata(singleton, Reflect.Enum.Priority)
-			or sortedIds[id]
+			or sortedIds[singleton]
 			or DEFAULT_PRIORITY
 		) :: number
 

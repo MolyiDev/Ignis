@@ -1,4 +1,5 @@
 local CollectionService = game:GetService("CollectionService")
+local Core = require(script.Parent.Core)
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
 local Signal = require(script.Parent.Signal)
@@ -23,7 +24,7 @@ local function registerInstance(instance: Instance)
 end
 
 local function attachToTag(tag: string, component: Types.Component)
-	if AttachedTags[tag] then error("[Flux Components]: Tag already in use: " .. tag, 2) end
+	if AttachedTags[tag] then error(`[Flux Components]: Tag already in use: {tag}`, 2) end
 
 	AttachedTags[tag] = true
 
@@ -53,9 +54,8 @@ function Component.Component<T>(members: T & Types.Object, tag: string?)
 		Tag = tag,
 		Members = members,
 	}
-	local componentId = Reflect.GetId(component)
 
-	if typeof(component.Tag) == "string" then Bin[componentId] = attachToTag(component.Tag, component) end
+	if typeof(component.Tag) == "string" then Bin[component] = attachToTag(component.Tag, component) end
 
 	Components[component] = true
 	return component
@@ -68,9 +68,8 @@ function Component.AddComponent(instance: Instance, component: Types.Component)
 	registerInstance(instance)
 
 	local object = constructComponent(instance, component)
-	local objectId = Reflect.GetId(object)
 
-	Bin[objectId] = instance.Destroying:Connect(function()
+	Bin[object] = instance.Destroying:Connect(function()
 		Component.RemoveComponent(instance, component)
 	end)
 
@@ -85,10 +84,10 @@ function Component.RemoveComponent(instance: Instance, component: Types.Componen
 	assert(typeof(instance) == "Instance", `[Flux Components]: Expected Instance, got {typeof(instance)}`)
 
 	local object = ActiveComponents[instance][component]
-	local objectId = Reflect.GetId(object)
 
-	local connection = Bin[objectId]
-	if connection.Connected then connection:Disconnect() end
+	local connection = Bin[object]
+	if connection and connection.Connected then connection:Disconnect() end
+	Bin[object] = nil
 
 	ActiveComponents[instance][component] = nil
 	Modding.RemoveListener(object)
