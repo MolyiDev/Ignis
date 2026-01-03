@@ -12,6 +12,7 @@ export type Listener = {
 }
 export type Component<T = any> = {
 	Tag: string?,
+	Instance: Instance?,
 	Members: T & Object,
 }
 
@@ -26,17 +27,14 @@ export type Extended =
 	& (<A, B, C, D, E>(self: A, B, C, D, E) -> A & B & C & D & E)
 	& (<A, B, C, D, E, F>(self: A, B, C, D, E, F) -> A & B & C & D & E & F)
 
+export type Lifecycle<T...> = {
+	Fire: (self: Lifecycle<T...>, T...) -> (),
+	FireSync: (self: Lifecycle<T...>, T...) -> (),
+	Destroy: (self: Lifecycle<T...>) -> (),
+}
+
 export type Lifecycles = {
-	CreateLifecycle: <T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()) -> () -> (),
-	CreateClientLifecycle: <T...>(
-		name: string,
-		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-	) -> (() -> ())?,
-	CreateServerLifecycle: <T...>(
-		name: string,
-		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-	) -> (() -> ())?,
-	RegisterLifecycle: (name: string) -> ((...any) -> (), (...any) -> (), () -> ()),
+	RegisterLifecycle: <T...>(name: string, sendSelf: boolean?) -> Lifecycle<T...>,
 	Disconnect: (name: string) -> (),
 	Reconnect: (name: string) -> (),
 }

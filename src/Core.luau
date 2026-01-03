@@ -12,20 +12,19 @@ Core.DefaultLifecycles = {
 	OnStop = "OnStop",
 }
 
-local _, fireSyncInit = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnInit)
-local fireStart = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStart)
-local fireStop = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStop)
+local onInit = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnInit, true)
+local onStart = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStart, true)
+local onStop = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStop, true)
 
-local Singletons: { [number]: any } = {}
+local Singletons: { any } = {}
 local Priorities: { [number]: number } = {}
 local PendingDependencies: { [string]: Types.Object } = {}
 local IsIgnited = false
 local HasShutdown = false
 
-local function topologicalSort(objects: { any }): { [any]: number }
-	local currentSize = 0
-	local sorted: { [any]: number } = {}
-	local visited: { [any]: boolean } = {}
+local function topologicalSort(objects: { any }): { any }
+	local sorted = {}
+	local visited = {}
 
 	local function visitor(node: any)
 		if visited[node] then return end
@@ -45,8 +44,7 @@ local function topologicalSort(objects: { any }): { [any]: number }
 			end
 		end
 
-		currentSize += 1
-		sorted[node] = currentSize
+		sorted[#sorted + 1] = node
 	end
 
 	for _, node in objects do
@@ -55,7 +53,6 @@ local function topologicalSort(objects: { any }): { [any]: number }
 
 	return sorted
 end
-
 function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Instance>?)
 	for _, descendant in parent:GetDescendants() do
 		if not descendant:IsA("ModuleScript") then continue end
@@ -127,15 +124,13 @@ function Core.Ignite()
 	if IsIgnited then error("[Flux] Cannot ignite framework twice.", 2) end
 	if HasShutdown then error("[Flux] Framework is shutdown; cannot re-ignite.", 2) end
 
-	local sortedIds = topologicalSort(Singletons)
+	local sortedSingletons = topologicalSort(Singletons)
 
-	for _, singleton in Singletons do
-		local priority = (
-			Reflect.ReadMetadata(singleton, Reflect.Enum.Priority)
-			or sortedIds[singleton]
-			or DEFAULT_PRIORITY
-		) :: number
+	for i = #sortedSingletons, 1, -1 do
+		local singleton = sortedSingletons[i]
 
+		-- Topological sort index is the priority.
+		local priority = i
 		Reflect.SetMetadata(singleton, Reflect.Enum.Priority, priority)
 
 		local source = Reflect.ReadMetadata(singleton, Reflect.Enum.Source) :: number
@@ -152,16 +147,20 @@ function Core.Ignite()
 
 	table.clear(Lifecycles._PendingManagers)
 
-	fireSyncInit()
+	onInit:FireSync()
 
-	fireStart()
+	onStart:Fire()
 
 	IsIgnited = true
 
 	return function()
 		if HasShutdown then return end
 
-		fireStop()
+		onStop:Fire()
+
+		onInit:Destroy()
+		onStart:Destroy()
+		onStop:Destroy()
 
 		HasShutdown = true
 	end

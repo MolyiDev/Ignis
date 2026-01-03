@@ -1,29 +1,67 @@
-local RunService = game:GetService("RunService")
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
 local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
 
-local Lifecycles = {} :: Types.PrivateLifecycles
-Lifecycles._PendingManagers = {}
-Lifecycles._IsIgnited = false
+type PrivateLifecycle = {
+	Name: string,
+	Signal: Signal.Signal<>,
+	AddedConnection: Signal.Connection,
+	RemovedConnection: Signal.Connection,
+}
 
 local Registry: { [string]: Types.Registry } = {}
 
-local function connectListener(name: string, listener: Types.Object, entry: Types.Registry, source: any)
+local function connectListener(
+	name: string,
+	listener: Types.Object,
+	entry: Types.Registry,
+	source: any,
+	sendSelf: boolean?
+)
 	if not entry.Listeners[source] then entry.Listeners[source] = {} end
 
 	if entry.Listeners[source][listener] then return end
 
 	local connection
-	connection = entry.Signal:Connect(function(...)
-		listener[name](...)
-	end)
+	if sendSelf then
+		connection = entry.Signal:Connect(function(...)
+			listener[name](listener, ...)
+		end)
+	else
+		connection = entry.Signal:Connect(function(...)
+			listener[name](...)
+		end)
+	end
 
 	entry.Listeners[source][listener] = connection
 end
 
-local function registerLifecycle(name: string)
+--==[ Lifecycle ]==--
+local Lifecycle = {}
+Lifecycle.__index = Lifecycle
+
+function Lifecycle.Fire(self: PrivateLifecycle, ...)
+	self.Signal:Fire(...)
+end
+
+function Lifecycle.FireSync(self: PrivateLifecycle, ...)
+	self.Signal:FireSync(...)
+end
+
+function Lifecycle.Destroy(self: PrivateLifecycle)
+	self.Signal:Destroy()
+	self.AddedConnection:Disconnect()
+	self.RemovedConnection:Disconnect()
+	Registry[self.Name] = nil
+end
+
+--==[ Lifecycles ]==--
+local Lifecycles = {} :: Types.PrivateLifecycles
+Lifecycles._PendingManagers = {}
+Lifecycles._IsIgnited = false
+
+function Lifecycles.RegisterLifecycle<T...>(name: string, sendSelf: boolean?)
 	local signal = Signal.new()
 
 	Registry[name] = {
@@ -35,7 +73,7 @@ local function registerLifecycle(name: string)
 	local addedConnection = Modding.OnListenerAdded(function(listener)
 		local source = Reflect.ReadMetadata(listener, Reflect.Enum.Source)
 		if not source then return end
-		connectListener(name, listener, Registry[name], source)
+		connectListener(name, listener, Registry[name], source, sendSelf)
 	end, name)
 
 	local removedConnection = Modding.OnListenerRemoved(function(listener)
@@ -56,50 +94,16 @@ local function registerLifecycle(name: string)
 		if entry.Disconnected[source] then entry.Disconnected[source][listener] = nil end
 	end, name)
 
-	local function fire(...)
-		signal:Fire(...)
-	end
+	local lifecycle = (
+		setmetatable({
+			Name = name,
+			Signal = signal,
+			AddedConnection = addedConnection,
+			RemovedConnection = removedConnection,
+		}, Lifecycle) :: any
+	) :: Types.Lifecycle<T...>
 
-	local function fireSync(...)
-		signal:FireSync(...)
-	end
-
-	local function destroy()
-		addedConnection:Disconnect()
-		removedConnection:Disconnect()
-		signal:Destroy()
-		Registry[name] = nil
-	end
-
-	return fire, fireSync, destroy
-end
-
-function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	local fire, fireSync, destroy = registerLifecycle(name)
-
-	if Lifecycles._IsIgnited then
-		manager(fire, fireSync)
-	else
-		Lifecycles._PendingManagers[#Lifecycles._PendingManagers + 1] = function()
-			manager(fire, fireSync)
-		end
-	end
-
-	return destroy
-end
-
-function Lifecycles.CreateClientLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	if RunService:IsServer() then return nil end
-	return Lifecycles.CreateLifecycle(name, manager)
-end
-
-function Lifecycles.CreateServerLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	if not RunService:IsServer() then return nil end
-	return Lifecycles.CreateLifecycle(name, manager)
-end
-
-function Lifecycles.RegisterLifecycle(name: string)
-	return registerLifecycle(name)
+	return lifecycle
 end
 
 function Lifecycles.Disconnect(name: string)

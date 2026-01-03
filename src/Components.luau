@@ -1,17 +1,20 @@
 local CollectionService = game:GetService("CollectionService")
-local Core = require(script.Parent.Core)
 local Modding = require(script.Parent.Modding)
-local Reflect = require(script.Parent.Reflect)
 local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
 
+--==[ Component ]==--
 local Component = {}
-Component.OnComponentRemoved = Signal.new()
-Component.OnComponentAdded = Signal.new()
+Component.__index = Component
+
+--==[ Components ]==--
+local Components = {}
+Components.OnComponentAdded = Signal.new()
+Components.OnComponentRemoved = Signal.new()
 
 local Bin = {} :: { [any]: any }
 local AttachedTags = {} :: Types.Set<string>
-local Components = {} :: Types.Set<Types.Component>
+local ComponentsSet = {} :: Types.Set<Types.Component>
 local ActiveComponents = {} :: { [Instance]: { [Types.Component]: Types.Object } }
 
 local function constructComponent(instance: Instance, component: Types.Component): Types.Object
@@ -29,11 +32,11 @@ local function attachToTag(tag: string, component: Types.Component)
 	AttachedTags[tag] = true
 
 	local function instanceAdded(instance: Instance)
-		Component.AddComponent(instance, component)
+		Components.AddComponent(instance, component)
 	end
 
 	local function instanceRemoved(instance: Instance)
-		Component.RemoveComponent(instance, component)
+		Components.RemoveComponent(instance, component)
 	end
 
 	local addedConnection = CollectionService:GetInstanceAddedSignal(tag):Connect(instanceAdded)
@@ -49,19 +52,20 @@ local function attachToTag(tag: string, component: Types.Component)
 	end
 end
 
-function Component.Component<T>(members: T & Types.Object, tag: string?)
+function Components.Component<T>(members: T & Types.Object, tag: string?, instance: Instance?)
 	local component: Types.Component = {
 		Tag = tag,
+		Instance = instance,
 		Members = members,
 	}
 
 	if typeof(component.Tag) == "string" then Bin[component] = attachToTag(component.Tag, component) end
 
-	Components[component] = true
+	ComponentsSet[component] = true
 	return component
 end
 
-function Component.AddComponent(instance: Instance, component: Types.Component)
+function Components.AddComponent(instance: Instance, component: Types.Component)
 	if ActiveComponents[instance] and ActiveComponents[instance][component] then return end
 	assert(typeof(instance) == "Instance", `[Flux Components] Expected Instance, got {typeof(instance)}`)
 
@@ -70,16 +74,16 @@ function Component.AddComponent(instance: Instance, component: Types.Component)
 	local object = constructComponent(instance, component)
 
 	Bin[object] = instance.Destroying:Connect(function()
-		Component.RemoveComponent(instance, component)
+		Components.RemoveComponent(instance, component)
 	end)
 
 	ActiveComponents[instance][component] = object
 	Modding.AddListener(object, { "OnInit", "OnStart", "OnStop" })
 
-	Component.OnComponentAdded:Fire(object, instance)
+	Components.OnComponentAdded:Fire(object, instance)
 end
 
-function Component.RemoveComponent(instance: Instance, component: Types.Component)
+function Components.RemoveComponent(instance: Instance, component: Types.Component)
 	if not ActiveComponents[instance] or not ActiveComponents[instance][component] then return end
 	assert(typeof(instance) == "Instance", `[Flux Components]: Expected Instance, got {typeof(instance)}`)
 
@@ -92,23 +96,23 @@ function Component.RemoveComponent(instance: Instance, component: Types.Componen
 	ActiveComponents[instance][component] = nil
 	Modding.RemoveListener(object)
 
-	Component.OnComponentRemoved:Fire(object, instance)
+	Components.OnComponentRemoved:Fire(object, instance)
 end
 
-function Component.ClearAllComponents(instance: Instance)
+function Components.ClearAllComponents(instance: Instance)
 	if not ActiveComponents[instance] then return end
 
 	for component in ActiveComponents[instance] do
-		Component.RemoveComponent(instance, component)
+		Components.RemoveComponent(instance, component)
 	end
 end
 
-function Component.GetComponent<T>(instance: Instance, component: Types.Component<T>)
+function Components.GetComponent<T>(instance: Instance, component: Types.Component<T>)
 	return ActiveComponents[instance][component] :: any
 end
 
-function Component.GetComponents(instance: Instance)
+function Components.GetComponents(instance: Instance)
 	return ActiveComponents[instance]
 end
 
-return Component
+return Components
