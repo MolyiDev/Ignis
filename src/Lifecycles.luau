@@ -16,29 +16,18 @@ local function connectListener(name: string, listener: Types.Object, entry: Type
 	if entry.Listeners[source][listener] then return end
 
 	local connection
-	if entry.Prioritized then
-		local priority = 0
-		local modulePriority = Reflect.ReadMetadata(listener, Reflect.Enum.Priority)
-		if type(modulePriority) == "number" then priority = modulePriority end
-		print(`priority {priority}, source {source}`)
-		connection = entry.Signal:ConnectPriority(priority, function(...)
-			listener[name](...)
-		end)
-	else
-		connection = entry.Signal:Connect(function(...)
-			listener[name](...)
-		end)
-	end
+	connection = entry.Signal:Connect(function(...)
+		listener[name](...)
+	end)
 
 	entry.Listeners[source][listener] = connection
 end
 
-local function registerLifecycle(name: string, prioritized: boolean)
-	local signal = Signal.newPriority()
+local function registerLifecycle(name: string)
+	local signal = Signal.new()
 
 	Registry[name] = {
 		Signal = signal,
-		Prioritized = prioritized,
 		Listeners = {},
 		Disconnected = {},
 	}
@@ -86,24 +75,7 @@ local function registerLifecycle(name: string, prioritized: boolean)
 end
 
 function Lifecycles.CreateLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	local fire, fireSync, destroy = registerLifecycle(name, false)
-
-	if Lifecycles._IsIgnited then
-		manager(fire, fireSync)
-	else
-		Lifecycles._PendingManagers[#Lifecycles._PendingManagers + 1] = function()
-			manager(fire, fireSync)
-		end
-	end
-
-	return destroy
-end
-
-function Lifecycles.CreatePrioritizedLifecycle<T...>(
-	name: string,
-	manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-)
-	local fire, fireSync, destroy = registerLifecycle(name, true)
+	local fire, fireSync, destroy = registerLifecycle(name)
 
 	if Lifecycles._IsIgnited then
 		manager(fire, fireSync)
@@ -117,37 +89,17 @@ function Lifecycles.CreatePrioritizedLifecycle<T...>(
 end
 
 function Lifecycles.CreateClientLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	if RunService:IsServer() then return end
+	if RunService:IsServer() then return nil end
 	return Lifecycles.CreateLifecycle(name, manager)
-end
-
-function Lifecycles.CreateClientPrioritizedLifecycle<T...>(
-	name: string,
-	manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-)
-	if RunService:IsServer() then return end
-	return Lifecycles.CreatePrioritizedLifecycle(name, manager)
 end
 
 function Lifecycles.CreateServerLifecycle<T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ())
-	if not RunService:IsServer() then return end
+	if not RunService:IsServer() then return nil end
 	return Lifecycles.CreateLifecycle(name, manager)
 end
 
-function Lifecycles.CreateServerPrioritizedLifecycle<T...>(
-	name: string,
-	manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-)
-	if not RunService:IsServer() then return end
-	return Lifecycles.CreatePrioritizedLifecycle(name, manager)
-end
-
 function Lifecycles.RegisterLifecycle(name: string)
-	return registerLifecycle(name, false)
-end
-
-function Lifecycles.RegisterPrioritizedLifecycle(name: string)
-	return registerLifecycle(name, true)
+	return registerLifecycle(name)
 end
 
 function Lifecycles.Disconnect(name: string)

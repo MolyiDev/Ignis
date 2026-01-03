@@ -1,3 +1,4 @@
+local Components = require(script.Components)
 local Core = require(script.Core)
 local Lifecycles = require(script.Lifecycles)
 local Modding = require(script.Modding)
@@ -22,4 +23,4 @@ local extend = (
 	end :: any
 ) :: Types.Extended
 
-return extend(Core, Modding, Lifecycles)
+return extend(Core, Modding, Lifecycles, Components)

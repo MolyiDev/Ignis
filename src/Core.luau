@@ -12,9 +12,9 @@ Core.DefaultLifecycles = {
 	OnStop = "OnStop",
 }
 
-local _, fireSyncInit = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnInit)
-local fireStart = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnStart)
-local fireStop = Lifecycles.RegisterPrioritizedLifecycle(Core.DefaultLifecycles.OnStop)
+local _, fireSyncInit = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnInit)
+local fireStart = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStart)
+local fireStop = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStop)
 
 local Singletons: { [number]: any } = {}
 local Priorities: { [number]: number } = {}
@@ -138,7 +138,8 @@ function Core.GetPriority(): number
 end
 
 function Core.Ignite()
-	if IsIgnited or HasShutdown then return end
+	if IsIgnited then error("[Flux] Cannot ignite framework twice.", 2) end
+	if HasShutdown then error("[Flux] Framework is shutdown; cannot re-ignite.", 2) end
 
 	local providerIds: { number } = {}
 	for id, _ in Singletons do

@@ -28,15 +28,7 @@ export type Extended =
 
 export type Lifecycles = {
 	CreateLifecycle: <T...>(name: string, manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()) -> () -> (),
-	CreatePrioritizedLifecycle: <T...>(
-		name: string,
-		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-	) -> () -> (),
 	CreateClientLifecycle: <T...>(
-		name: string,
-		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-	) -> (() -> ())?,
-	CreateClientPrioritizedLifecycle: <T...>(
 		name: string,
 		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
 	) -> (() -> ())?,
@@ -44,12 +36,7 @@ export type Lifecycles = {
 		name: string,
 		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
 	) -> (() -> ())?,
-	CreateServerPrioritizedLifecycle: <T...>(
-		name: string,
-		manager: (fire: (T...) -> (), fireSync: (T...) -> ()) -> ()
-	) -> (() -> ())?,
 	RegisterLifecycle: (name: string) -> ((...any) -> (), (...any) -> (), () -> ()),
-	RegisterPrioritizedLifecycle: (name: string) -> ((...any) -> (), (...any) -> (), () -> ()),
 	Disconnect: (name: string) -> (),
 	Reconnect: (name: string) -> (),
 }
@@ -60,10 +47,9 @@ export type PrivateLifecycles = Lifecycles & {
 }
 
 export type Registry = {
-	Signal: Signal.PrioritySignal<...any>,
-	Prioritized: boolean,
-	Listeners: {},
-	Disconnected: {},
+	Signal: Signal.Signal<...any>,
+	Listeners: { [any]: { [any]: any } },
+	Disconnected: { [any]: { [any]: any } },
 }
 
 return nil

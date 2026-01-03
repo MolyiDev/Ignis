@@ -1,5 +1,7 @@
 local Types = require(script.Parent.Types)
 
+local HASH_PRIME = 5381
+
 local Reflect = {}
 Reflect.Enum = table.freeze({
 	IsSingleton = 0,
@@ -12,14 +14,14 @@ local Registry: { [number]: unknown } = {}
 
 local function hash(data: unknown): number
 	local str = tostring(data)
-	local hash = 5381
+	local hashFinal = HASH_PRIME
 
 	for i = 1, #str do
 		local c = string.byte(str, i)
-		hash = (bit32.lshift(hash, 5) + hash) + c
+		hashFinal = (bit32.lshift(hashFinal, 5) + hashFinal) + c
 	end
 
-	return bit32.bxor(hash, 0)
+	return bit32.bxor(hashFinal, 0)
 end
 
 function Reflect.GetId<T>(object: T): number

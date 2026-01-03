@@ -1,7 +1,8 @@
-name = "molyi/flux"
+name = "molyidev/flux"
 version = "1.0.0"
+description = "Module loader library."
 authors = ["Molyi"]
-repository = "https://github.com/MolyiEZ/Flux"
+repository = "https://github.com/MolyiDev/Flux"
 license = "MIT"
 includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
 

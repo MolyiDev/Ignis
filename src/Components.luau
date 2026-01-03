@@ -23,7 +23,7 @@ local function registerInstance(instance: Instance)
 end
 
 local function attachToTag(tag: string, component: Types.Component)
-	if AttachedTags[tag] then error("[artwork.Component]: tag already in use: " .. tag, 2) end
+	if AttachedTags[tag] then error("[Flux Components]: Tag already in use: " .. tag, 2) end
 
 	AttachedTags[tag] = true
 
@@ -48,7 +48,7 @@ local function attachToTag(tag: string, component: Types.Component)
 	end
 end
 
-function Component.Component<T>(members: T & Types.Object, tag: string?): Types.Component<T>
+function Component.Component<T>(members: T & Types.Object, tag: string?)
 	local component: Types.Component = {
 		Tag = tag,
 		Members = members,
@@ -63,7 +63,7 @@ end
 
 function Component.AddComponent(instance: Instance, component: Types.Component)
 	if ActiveComponents[instance] and ActiveComponents[instance][component] then return end
-	assert(typeof(instance) == "Instance", `[artwork.Component]: expected Instance, got {typeof(instance)}`)
+	assert(typeof(instance) == "Instance", `[Flux Components] Expected Instance, got {typeof(instance)}`)
 
 	registerInstance(instance)
 
@@ -75,14 +75,14 @@ function Component.AddComponent(instance: Instance, component: Types.Component)
 	end)
 
 	ActiveComponents[instance][component] = object
-	Modding.AddListener(object, { "onInit", "onStart", "onStop" })
+	Modding.AddListener(object, { "OnInit", "OnStart", "OnStop" })
 
 	Component.OnComponentAdded:Fire(object, instance)
 end
 
 function Component.RemoveComponent(instance: Instance, component: Types.Component)
 	if not ActiveComponents[instance] or not ActiveComponents[instance][component] then return end
-	assert(typeof(instance) == "Instance", `[artwork.Component]: expected Instance, got {typeof(instance)}`)
+	assert(typeof(instance) == "Instance", `[Flux Components]: Expected Instance, got {typeof(instance)}`)
 
 	local object = ActiveComponents[instance][component]
 	local objectId = Reflect.GetId(object)
@@ -104,11 +104,11 @@ function Component.ClearAllComponents(instance: Instance)
 	end
 end
 
-function Component.GetComponent<T>(instance: Instance, component: Types.Component<T>): T & Types.Object
+function Component.GetComponent<T>(instance: Instance, component: Types.Component<T>)
 	return ActiveComponents[instance][component] :: any
 end
 
-function Component.GetComponents(instance: Instance): { [Types.Component]: unknown }
+function Component.GetComponents(instance: Instance)
 	return ActiveComponents[instance]
 end
 
