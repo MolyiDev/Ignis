@@ -1,4 +1,5 @@
 local CollectionService = game:GetService("CollectionService")
+local Modding = require(script.Parent.Modding)
 local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
 
@@ -111,7 +112,7 @@ local function attachToTag(tag: string, component: Types.Component)
 	return startTagConnection(tag, component)
 end
 
-function Components.Component<T>(members: T & Types.Object, config: Types.ComponentConfig?)
+function Components.Component<T>(members: T, config: Types.ComponentConfig?)
 	local component: Types.Component = {
 		Config = config or {},
 		Instance = nil,
@@ -123,7 +124,7 @@ function Components.Component<T>(members: T & Types.Object, config: Types.Compon
 
 	ComponentsSet[component] = true
 
-	return members
+	return component
 end
 
 function Components.AddComponent(instance: Instance, component: Types.Component)
@@ -142,6 +143,8 @@ function Components.AddComponent(instance: Instance, component: Types.Component)
 
 	Components.OnComponentAdded:Fire(object, instance)
 
+	Modding.AddListener(object)
+
 	if object.OnSpawn then task.spawn(object.OnSpawn, object) end
 end
 
@@ -151,11 +154,16 @@ function Components.RemoveComponent(instance: Instance, component: Types.Compone
 
 	local object = ActiveComponents[instance][component]
 
+	Modding.RemoveListener(object)
+
 	if object.OnDespawn then task.spawn(object.OnDespawn, object) end
 
 	ActiveComponents[instance][component] = nil
 
 	Components.OnComponentRemoved:Fire(object, instance)
+
+	-- If the instance has no more components then take it out of the list.
+	if next(ActiveComponents[instance]) == nil then ActiveComponents[instance] = nil end
 end
 
 function Components.ClearAllComponents(instance: Instance)
@@ -167,7 +175,8 @@ function Components.ClearAllComponents(instance: Instance)
 end
 
 function Components.GetComponent<T>(instance: Instance, component: Types.Component<T>)
-	return ActiveComponents[instance][component] :: any
+	local comps = ActiveComponents[instance]
+	return if comps then comps[component] else nil
 end
 
 function Components.GetComponents(instance: Instance)
@@ -179,6 +188,7 @@ function Components.Start()
 	IsIgnited = true
 
 	for _, entry in DeferredTags do
+		if not AttachedTags[entry.Tag] then continue end
 		Bin[entry.Component] = startTagConnection(entry.Tag, entry.Component)
 	end
 

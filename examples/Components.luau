@@ -23,8 +23,11 @@ function Coin.OnDespawn(self: Coin)
 	if self.SpinLoop then self.SpinLoop:Disconnect() end
 end
 
-return Ignis.Component(Coin, {
-	-- We look for base parts that have the tag 'Coin'
-	Tag = "Coin",
-	BaseClass = "BasePart",
-})
+return Ignis.Component(
+	Coin,
+	{
+		-- We look for base parts that have the tag 'Coin'
+		Tag = "Coin",
+		BaseClass = "BasePart",
+	} :: Ignis.ComponentConfig
+)

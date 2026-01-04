@@ -25,5 +25,6 @@ local extend = (
 
 export type Lifecycle<T...> = Types.Lifecycle<T...>
 export type Component<T> = Types.BaseComponent<T>
+export type ComponentConfig = Types.ComponentConfig
 
 return extend(Core, Modding, Lifecycles, Components)

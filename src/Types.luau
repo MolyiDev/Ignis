@@ -78,7 +78,7 @@ export type PrivateModding = Modding & {
 }
 
 export type Components = {
-	Component: <T>(members: T & Object, config: ComponentConfig?) -> (),
+	Component: <T>(members: T, config: ComponentConfig?) -> T,
 	AddComponent: (instance: Instance, component: Component) -> (),
 	RemoveComponent: (instance: Instance, component: Component) -> (),
 	ClearAllComponents: (instance: Instance) -> (),
