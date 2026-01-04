@@ -28,8 +28,6 @@ export type ComponentConfig = {
 	Defaults: { [string]: any }?,
 	-- Attribute validation functions (Guards)
 	Attributes: { [string]: AttributeGuard }?,
-	-- Should attributes update trigger a refresh (Default: true)
-	RefreshAttributes: boolean?,
 }
 
 export type BaseComponent<T> = {
@@ -71,12 +69,26 @@ export type Modding = {
 	AddListener: <T>(object: T, ignoreList: { string }?) -> (),
 	RemoveListener: (object: Object) -> (),
 	GetListeners: (name: string) -> { Object }?,
-	OnListenerAdded: (callback: (object: Types.Object) -> (), id: string?) -> (),
-	OnListenerRemoved: (callback: (object: Types.Object) -> (), id: string?) -> (),
+	OnListenerAdded: (callback: (object: Object) -> (), id: string?) -> Signal.Connection,
+	OnListenerRemoved: (callback: (object: Object) -> (), id: string?) -> Signal.Connection,
 }
 
-export type ModdingPrivate = {
+export type PrivateModding = Modding & {
 	RegisterLifecycle: (name: string) -> (),
+}
+
+export type Components = {
+	Component: <T>(members: T & Object, config: ComponentConfig?) -> (),
+	AddComponent: (instance: Instance, component: Component) -> (),
+	RemoveComponent: (instance: Instance, component: Component) -> (),
+	ClearAllComponents: (instance: Instance) -> (),
+	GetComponent: <T>(instance: Instance, component: Component<T>) -> (),
+	GetComponents: (instance: Instance) -> (),
+}
+
+export type PrivateComponents = Components & {
+	Start: () -> (),
+	Stop: () -> (),
 }
 
 return nil

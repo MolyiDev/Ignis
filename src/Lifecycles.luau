@@ -1,7 +1,7 @@
 local Types = require(script.Parent.Types)
 local Reflect = require(script.Parent.Reflect)
 local Signal = require(script.Parent.Signal)
-local Modding = require(script.Parent.Modding) :: Types.ModdingPrivate
+local Modding = require(script.Parent.Modding) :: Types.PrivateModding
 
 type PrivateLifecycle = {
 	Name: string,

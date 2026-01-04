@@ -10,6 +10,10 @@ local Bin = {} :: { [any]: any }
 local AttachedTags = {} :: Types.Set<string>
 local ComponentsSet = {} :: Types.Set<Types.Component>
 local ActiveComponents = {} :: { [Instance]: { [Types.Component]: Types.Object } }
+local TagConnections = {} :: { () -> () }
+
+local IsIgnited = false
+local DeferredTags = {} :: { { Tag: string, Component: Types.Component } }
 
 local function constructComponent(instance: Instance, component: Types.Component): Types.Object
 	local object = { Instance = instance }
@@ -64,11 +68,7 @@ local function applyDefaults(instance: Instance, config: Types.ComponentConfig)
 	end
 end
 
-local function attachToTag(tag: string, component: Types.Component)
-	if AttachedTags[tag] then error(`[Ignis Components]: Tag already in use: {tag}`, 2) end
-
-	AttachedTags[tag] = true
-
+local function startTagConnection(tag: string, component: Types.Component)
 	local function instanceAdded(instance: Instance)
 		Components.AddComponent(instance, component)
 	end
@@ -81,13 +81,34 @@ local function attachToTag(tag: string, component: Types.Component)
 	local removedConnection = CollectionService:GetInstanceRemovedSignal(tag):Connect(instanceRemoved)
 
 	for _, instance in CollectionService:GetTagged(tag) do
-		instanceAdded(instance)
+		task.spawn(instanceAdded, instance)
 	end
 
-	return function()
+	local cleanup = function()
 		addedConnection:Disconnect()
 		removedConnection:Disconnect()
 	end
+
+	TagConnections[#TagConnections + 1] = cleanup
+
+	return cleanup
+end
+
+local function attachToTag(tag: string, component: Types.Component)
+	if AttachedTags[tag] then error(`[Ignis Components]: Tag already in use: {tag}`, 2) end
+	AttachedTags[tag] = true
+
+	-- If Ignis is not ignited, queue it.
+	if not IsIgnited then
+		DeferredTags[#DeferredTags + 1] = { Tag = tag, Component = component }
+
+		return function()
+			-- Handle cleanup if the component is destroyed before Ignis starts
+			AttachedTags[tag] = nil
+		end
+	end
+
+	return startTagConnection(tag, component)
 end
 
 function Components.Component<T>(members: T & Types.Object, config: Types.ComponentConfig?)
@@ -101,7 +122,8 @@ function Components.Component<T>(members: T & Types.Object, config: Types.Compon
 	if component.Config.Tag then Bin[component] = attachToTag(component.Config.Tag, component) end
 
 	ComponentsSet[component] = true
-	return component
+
+	return members
 end
 
 function Components.AddComponent(instance: Instance, component: Types.Component)
@@ -150,6 +172,25 @@ end
 
 function Components.GetComponents(instance: Instance)
 	return ActiveComponents[instance]
+end
+
+function Components.Start()
+	if IsIgnited then return end
+	IsIgnited = true
+
+	for _, entry in DeferredTags do
+		Bin[entry.Component] = startTagConnection(entry.Tag, entry.Component)
+	end
+
+	table.clear(DeferredTags)
+end
+
+function Components.Stop()
+	for _, cleanup in TagConnections do
+		cleanup()
+	end
+
+	table.clear(TagConnections)
 end
 
 return Components

@@ -8,7 +8,6 @@ type Coin = {
 } & Ignis.Component<BasePart>
 
 local Coin = {}
-Coin.__index = Coin
 
 -- This method fires when a new instance with the specified tag has been created.
 -- Or when you use 'Ignis.AddComponent(instance, Coin)' to manually add an instance.

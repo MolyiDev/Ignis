@@ -12,7 +12,7 @@ local ListenerRemovedEvents = {} :: { [string]: Types.ListenerRemovedEvent }
 
 local LifecycleListeners = {} :: { [string]: Types.Set<Types.Object> }
 local RegisteredLifecycles = {} :: { [string]: boolean }
-local Listeners = {} :: { [Types.Object]: Types.Listener }
+local Listeners = setmetatable({}, { __mode = "k" }) :: { [Types.Object]: Types.Listener }
 
 local function registerObjectForLifecycle(object: Types.Object, lifecycleEvent: string)
 	if typeof(object[lifecycleEvent]) ~= "function" then return end

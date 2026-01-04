@@ -2,6 +2,7 @@ local Types = require(script.Parent.Types)
 local Lifecycles = require(script.Parent.Lifecycles)
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
+local Components = require(script.Parent.Components) :: Types.PrivateComponents
 
 local DEFAULT_PRIORITY = 0
 
@@ -144,6 +145,8 @@ function Core.Ignite()
 
 	onStart:Fire()
 
+	Components.Start()
+
 	IsIgnited = true
 
 	return function()
@@ -154,6 +157,8 @@ function Core.Ignite()
 		onInit:Destroy()
 		onStart:Destroy()
 		onStop:Destroy()
+
+		Components.Stop()
 
 		HasShutdown = true
 	end
