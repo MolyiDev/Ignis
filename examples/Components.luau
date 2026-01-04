@@ -26,7 +26,7 @@ end
 return Ignis.Component(
 	Coin,
 	{
-		-- We look for base parts that have the tag 'Coin'
+		-- We look for base parts that have the 'Coin' tag
 		Tag = "Coin",
 		BaseClass = "BasePart",
 	} :: Ignis.ComponentConfig
