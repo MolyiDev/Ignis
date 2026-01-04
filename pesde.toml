@@ -1,8 +1,8 @@
-name = "molyidev/flux"
+name = "molyidev/ignis"
 version = "1.0.0"
-description = "Module loader library."
+description = "Framework library."
 authors = ["Molyi"]
-repository = "https://github.com/MolyiDev/Flux"
+repository = "https://github.com/MolyiDev/Ignis"
 license = "MIT"
 includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
 

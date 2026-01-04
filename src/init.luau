@@ -23,4 +23,7 @@ local extend = (
 	end :: any
 ) :: Types.Extended
 
+export type Lifecycle<T...> = Types.Lifecycle<T...>
+export type Component<T> = Types.BaseComponent<T>
+
 return extend(Core, Modding, Lifecycles, Components)

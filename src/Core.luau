@@ -1,5 +1,5 @@
 local Types = require(script.Parent.Types)
-local Lifecycles = require(script.Parent.Lifecycles) :: Types.PrivateLifecycles
+local Lifecycles = require(script.Parent.Lifecycles)
 local Modding = require(script.Parent.Modding)
 local Reflect = require(script.Parent.Reflect)
 
@@ -121,8 +121,8 @@ function Core.GetPriority(): number
 end
 
 function Core.Ignite()
-	if IsIgnited then error("[Flux] Cannot ignite framework twice.", 2) end
-	if HasShutdown then error("[Flux] Framework is shutdown; cannot re-ignite.", 2) end
+	if IsIgnited then error("[Ignis] Cannot ignite framework twice.", 2) end
+	if HasShutdown then error("[Ignis] Framework is shutdown; cannot re-ignite.", 2) end
 
 	local sortedSingletons = topologicalSort(Singletons)
 
@@ -138,14 +138,6 @@ function Core.Ignite()
 
 		Modding.AddListener(singleton)
 	end
-
-	Lifecycles._IsIgnited = true
-
-	for _, manager in Lifecycles._PendingManagers do
-		task.spawn(manager)
-	end
-
-	table.clear(Lifecycles._PendingManagers)
 
 	onInit:FireSync()
 

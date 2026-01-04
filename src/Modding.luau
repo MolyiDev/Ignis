@@ -11,7 +11,7 @@ local ListenerRemovedEvents = {} :: { [string]: Types.ListenerRemovedEvent }
 local Listeners = {} :: { [Types.Object]: Types.Listener }
 
 function Modding.AddListener<T>(object: T, ignoreList: { string }?)
-	if typeof(object) ~= "table" then error("[Flux Modding] Object must be a table", 2) end
+	if typeof(object) ~= "table" then error("[Ignis Modding] Object must be a table", 2) end
 
 	if Reflect.GetMetadata(object, Reflect.Enum.Source) == nil then
 		Reflect.SetMetadata(object, Reflect.Enum.Source, debug.info(2, "s"))
@@ -47,7 +47,7 @@ end
 
 function Modding.RemoveListener(object: Types.Object)
 	local listener = Listeners[object]
-	if not listener then error("[Flux Modding] Given object is not a listener", 2) end
+	if not listener then error("[Ignis Modding] Given object is not a listener", 2) end
 
 	for _, set in listener.Involvement do
 		set[object] = nil

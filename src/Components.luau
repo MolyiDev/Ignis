@@ -1,11 +1,6 @@
 local CollectionService = game:GetService("CollectionService")
-local Modding = require(script.Parent.Modding)
 local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
-
---==[ Component ]==--
-local Component = {}
-Component.__index = Component
 
 --==[ Components ]==--
 local Components = {}
@@ -18,7 +13,7 @@ local ComponentsSet = {} :: Types.Set<Types.Component>
 local ActiveComponents = {} :: { [Instance]: { [Types.Component]: Types.Object } }
 
 local function constructComponent(instance: Instance, component: Types.Component): Types.Object
-	local object = { instance = instance }
+	local object = { Instance = instance }
 	return setmetatable(object, { __index = component.Members }) :: any
 end
 
@@ -26,8 +21,52 @@ local function registerInstance(instance: Instance)
 	if not ActiveComponents[instance] then ActiveComponents[instance] = {} end
 end
 
+local function shouldConstruct(instance: Instance, config: Types.ComponentConfig): boolean
+	-- IsA Check
+	if config.BaseClass and not instance:IsA(config.BaseClass) then return false end
+
+	-- Ancestor Check
+	if config.AncestorWhitelist and #config.AncestorWhitelist > 0 then
+		local isWhitelisted = false
+		for _, ancestor in config.AncestorWhitelist do
+			if instance:IsDescendantOf(ancestor) then
+				isWhitelisted = true
+				break
+			end
+		end
+		if not isWhitelisted then return false end
+	end
+
+	if config.AncestorBlacklist then
+		for _, ancestor in config.AncestorBlacklist do
+			if instance:IsDescendantOf(ancestor) then return false end
+		end
+	end
+
+	-- Attribute Check
+	if config.Attributes then
+		for attribute, guard in config.Attributes do
+			local value = instance:GetAttribute(attribute)
+			if not guard(value) then return false end
+		end
+	end
+
+	-- Predicate Check
+	if config.Predicate and not config.Predicate(instance) then return false end
+
+	return true
+end
+
+local function applyDefaults(instance: Instance, config: Types.ComponentConfig)
+	if not config.Defaults then return end
+
+	for key, value in config.Defaults do
+		if instance:GetAttribute(key) == nil then instance:SetAttribute(key, value) end
+	end
+end
+
 local function attachToTag(tag: string, component: Types.Component)
-	if AttachedTags[tag] then error(`[Flux Components]: Tag already in use: {tag}`, 2) end
+	if AttachedTags[tag] then error(`[Ignis Components]: Tag already in use: {tag}`, 2) end
 
 	AttachedTags[tag] = true
 
@@ -52,14 +91,15 @@ local function attachToTag(tag: string, component: Types.Component)
 	end
 end
 
-function Components.Component<T>(members: T & Types.Object, tag: string?, instance: Instance?)
+function Components.Component<T>(members: T & Types.Object, config: Types.ComponentConfig?)
 	local component: Types.Component = {
-		Tag = tag,
-		Instance = instance,
+		Config = config or {},
+		Instance = nil,
 		Members = members,
 	}
 
-	if typeof(component.Tag) == "string" then Bin[component] = attachToTag(component.Tag, component) end
+	-- Attach to tag if provided
+	if component.Config.Tag then Bin[component] = attachToTag(component.Config.Tag, component) end
 
 	ComponentsSet[component] = true
 	return component
@@ -67,7 +107,11 @@ end
 
 function Components.AddComponent(instance: Instance, component: Types.Component)
 	if ActiveComponents[instance] and ActiveComponents[instance][component] then return end
-	assert(typeof(instance) == "Instance", `[Flux Components] Expected Instance, got {typeof(instance)}`)
+	assert(typeof(instance) == "Instance", `[Ignis Components] Expected Instance, got {typeof(instance)}`)
+
+	applyDefaults(instance, component.Config)
+
+	if not shouldConstruct(instance, component.Config) then return end
 
 	registerInstance(instance)
 
@@ -78,23 +122,25 @@ function Components.AddComponent(instance: Instance, component: Types.Component)
 	end)
 
 	ActiveComponents[instance][component] = object
-	Modding.AddListener(object, { "OnInit", "OnStart", "OnStop" })
 
 	Components.OnComponentAdded:Fire(object, instance)
+
+	if object.OnSpawn then task.spawn(object.OnSpawn, object) end
 end
 
 function Components.RemoveComponent(instance: Instance, component: Types.Component)
 	if not ActiveComponents[instance] or not ActiveComponents[instance][component] then return end
-	assert(typeof(instance) == "Instance", `[Flux Components]: Expected Instance, got {typeof(instance)}`)
+	assert(typeof(instance) == "Instance", `[Ignis Components]: Expected Instance, got {typeof(instance)}`)
 
 	local object = ActiveComponents[instance][component]
+
+	if object.OnDespawn then task.spawn(object.OnDespawn, object) end
 
 	local connection = Bin[object]
 	if connection and connection.Connected then connection:Disconnect() end
 	Bin[object] = nil
 
 	ActiveComponents[instance][component] = nil
-	Modding.RemoveListener(object)
 
 	Components.OnComponentRemoved:Fire(object, instance)
 end

@@ -57,9 +57,7 @@ function Lifecycle.Destroy(self: PrivateLifecycle)
 end
 
 --==[ Lifecycles ]==--
-local Lifecycles = {} :: Types.PrivateLifecycles
-Lifecycles._PendingManagers = {}
-Lifecycles._IsIgnited = false
+local Lifecycles = {}
 
 function Lifecycles.RegisterLifecycle<T...>(name: string, sendSelf: boolean?)
 	local signal = Signal.new()
@@ -140,4 +138,4 @@ function Lifecycles.Reconnect(name: string)
 	end
 end
 
-return Lifecycles :: Types.Lifecycles
+return Lifecycles

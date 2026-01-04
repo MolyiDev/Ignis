@@ -1,0 +1,13 @@
+[package]
+name = "molyidev/ignis"
+version = "1.0.0"
+description = "Framework library."
+authors = ["Molyi"]
+registry = "https://github.com/UpliftGames/wally-index"
+repository = "https://github.com/MolyiDev/Ignis"
+license = "MIT"
+realm = "shared"
+exclude = ["**"]
+include = ["wally.toml", "default.project.json", "README.md", "LICENSE", "src", "src/**"]
+
+[dependencies]

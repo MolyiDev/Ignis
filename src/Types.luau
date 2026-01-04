@@ -10,15 +10,37 @@ export type Listener = {
 	EventIds: Set<string>,
 	Involvement: { Set<Object> },
 }
-export type Component<T = any> = {
+
+export type AttributeGuard = (value: any) -> boolean
+
+export type ComponentConfig = {
+	-- CollectionService Tag
 	Tag: string?,
+	-- Only attach to instances of this class (IsA check)
+	BaseClass: string?,
+	-- Custom condition for attachment
+	Predicate: ((Instance) -> boolean)?,
+	-- Only attach if descendant of one of these
+	AncestorWhitelist: { Instance }?,
+	-- Do not attach if descendant of one of these
+	AncestorBlacklist: { Instance }?,
+	-- Default attribute values to apply if missing
+	Defaults: { [string]: any }?,
+	-- Attribute validation functions (Guards)
+	Attributes: { [string]: AttributeGuard }?,
+	-- Should attributes update trigger a refresh (Default: true)
+	RefreshAttributes: boolean?,
+}
+
+export type BaseComponent<T> = {
+	Instance: T,
+}
+
+export type Component<T = any> = {
+	Config: ComponentConfig,
 	Instance: Instance?,
 	Members: T & Object,
 }
-
-export type OnStart = Object & { OnStart: (self: OnStart) -> () }
-export type OnInit = Object & { OnInit: (self: OnInit) -> () }
-export type OnStop = Object & { OnStop: (self: OnStop) -> () }
 
 export type Extended =
 	& (<A, B>(self: A, B) -> A & B)
@@ -37,11 +59,6 @@ export type Lifecycles = {
 	RegisterLifecycle: <T...>(name: string, sendSelf: boolean?) -> Lifecycle<T...>,
 	Disconnect: (name: string) -> (),
 	Reconnect: (name: string) -> (),
-}
-
-export type PrivateLifecycles = Lifecycles & {
-	_PendingManagers: { () -> () },
-	_IsIgnited: boolean,
 }
 
 export type Registry = {

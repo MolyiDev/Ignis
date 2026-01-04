@@ -1,9 +1,9 @@
-# Flux
+# Ignis
 
 ## Installation
 
 ```bash
-pesde add molyi/flux
+pesde add molyi/ignis
 ```
 
 ## Usage
@@ -11,7 +11,7 @@ pesde add molyi/flux
 ### Creating a Controller/Service/Provider/Singleton/you name it.
 
 ```luau
-local Flux = require(path.to.Flux)
+local Ignis = require(path.to.ignis)
 
 local Example = {}
 
@@ -32,17 +32,17 @@ function Example.OnStop()
     print("Stopping...")
 end
 
-return Flux.Register(Example)
+return Ignis.Register(Example)
 ```
 
 ### Dependency injection
 
-You can declare dependencies using `Flux.Dependency` before registering.
+You can declare dependencies using `Ignis.Dependency` before registering.
 This will make the module declared as `Dependency` be initialized before the module that was requesting it.
 
 ```luau
-local Flux = require(path.to.flux)
-local OtherSingleton = Flux.Dependency(require(path.to.OtherSingleton))
+local Ignis = require(path.to.ignis)
+local OtherSingleton = Ignis.Dependency(require(path.to.OtherSingleton))
 
 local ThisSingleton = {}
 
@@ -50,40 +50,40 @@ function ThisSingleton.OnStart()
     OtherSingleton.DoThings()
 end
 
-return Flux.Register(ThisSingleton)
+return Ignis.Register(ThisSingleton)
 ```
 
 ### Ignition
 
-Start Flux in your entry script (server or client).
+Start Ignis in your entry script (server or client).
 
 ```luau
-local Flux = require(path.to.flux)
+local Ignis = require(path.to.ignis)
 
 -- Load all the modules
-Flux.LoadDescendants(script.Singletons)
-Flux.LoadChildren(script.Modding)
+Ignis.LoadDescendants(script.Singletons)
+Ignis.LoadChildren(script.Modding)
 
 -- Then just burn everything
-Flux.Ignite()
+Ignis.Ignite()
 ```
 
 ### Lifecycles
 
-Flux supports custom lifecycle events.
+Ignis supports custom lifecycle events.
 
 ```luau
 -- HeartbeatEvent.luau
-local Flux = require(path.to.flux)
+local Ignis = require(path.to.ignis)
 
-Flux.CreateLifecycle("OnHeartbeat", function(fire)
+Ignis.CreateLifecycle("OnHeartbeat", function(fire)
     game:GetService("RunService").Heartbeat:Connect(fire)
 end)
 
 return nil
 
 -- SomeSingleton.luau
-local Flux = require(path.to.flux)
+local Ignis = require(path.to.ignis)
 
 local SomeSingleton = {}
 
@@ -91,7 +91,7 @@ function MyService.OnHeartbeat(dt)
     print("Heartbeat:", dt)
 end
 
-return Flux.Register(SomeSingleton)
+return Ignis.Register(SomeSingleton)
 ```
 
 ---
