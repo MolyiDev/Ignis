@@ -53,6 +53,7 @@ local function topologicalSort(objects: { any }): { any }
 
 	return sorted
 end
+
 function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Instance>?)
 	for _, descendant in parent:GetDescendants() do
 		if not descendant:IsA("ModuleScript") then continue end

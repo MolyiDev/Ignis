@@ -3,12 +3,38 @@ local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
 
 local Modding = {}
-local LifecycleListeners = {} :: { [string]: Types.Set<Types.Object> }
+
 local ListenerAdded = Signal.new() :: Types.ListenerAddedEvent
 local ListenerRemoved = Signal.new() :: Types.ListenerRemovedEvent
+
 local ListenerAddedEvents = {} :: { [string]: Types.ListenerAddedEvent }
 local ListenerRemovedEvents = {} :: { [string]: Types.ListenerRemovedEvent }
+
+local LifecycleListeners = {} :: { [string]: Types.Set<Types.Object> }
+local RegisteredLifecycles = {} :: { [string]: boolean }
 local Listeners = {} :: { [Types.Object]: Types.Listener }
+
+local function registerObjectForLifecycle(object: Types.Object, lifecycleEvent: string)
+	if typeof(object[lifecycleEvent]) ~= "function" then return end
+
+	local listener = Listeners[object]
+	if not listener then return end
+
+	if listener.EventIds[lifecycleEvent] then return end
+
+	local lifecycleListener = LifecycleListeners[lifecycleEvent]
+	if not lifecycleListener then
+		lifecycleListener = {}
+		LifecycleListeners[lifecycleEvent] = lifecycleListener
+	end
+
+	lifecycleListener[object] = true
+	listener.EventIds[lifecycleEvent] = true
+	listener.Involvement[#listener.Involvement + 1] = lifecycleListener
+
+	local eventSignal = ListenerAddedEvents[lifecycleEvent]
+	if eventSignal then eventSignal:Fire(object) end
+end
 
 function Modding.AddListener<T>(object: T, ignoreList: { string }?)
 	if typeof(object) ~= "table" then error("[Ignis Modding] Object must be a table", 2) end
@@ -22,26 +48,13 @@ function Modding.AddListener<T>(object: T, ignoreList: { string }?)
 		Involvement = {},
 	}
 
-	for lifecycleEvent, callback in object :: { [string]: () -> () } do
-		if typeof(lifecycleEvent) ~= "string" or typeof(callback) ~= "function" then continue end
+	Listeners[object] = listener
+
+	for lifecycleEvent in RegisteredLifecycles do
 		if ignoreList and table.find(ignoreList, lifecycleEvent) then continue end
-		if listener.EventIds[lifecycleEvent] then continue end
-
-		local lifecycleListener = LifecycleListeners[lifecycleEvent]
-		if not lifecycleListener then
-			lifecycleListener = {}
-			LifecycleListeners[lifecycleEvent] = lifecycleListener
-		end
-
-		lifecycleListener[object] = true
-		listener.EventIds[lifecycleEvent] = true
-		listener.Involvement[#listener.Involvement + 1] = lifecycleListener
-
-		local eventSignal = ListenerAddedEvents[lifecycleEvent]
-		if eventSignal then eventSignal:Fire(object) end
+		registerObjectForLifecycle(object, lifecycleEvent)
 	end
 
-	Listeners[object] = listener
 	ListenerAdded:Fire(object)
 end
 
@@ -63,22 +76,13 @@ function Modding.RemoveListener(object: Types.Object)
 	ListenerRemoved:Fire(object)
 end
 
-function Modding.AddLifecycleListener(name: string, callback: (...any) -> ())
-	local source = debug.info(2, "s")
-	local object = {
-		[name] = callback,
-	}
-
-	Reflect.SetMetadata(object, Reflect.Enum.Source, source)
-
-	Modding.AddListener(object)
-	return function()
-		Modding.RemoveListener(object)
-	end
+function Modding.RegisterLifecycle(name: string)
+	if RegisteredLifecycles[name] then return end
+	RegisteredLifecycles[name] = true
 end
 
-function Modding.GetListeners(id: string): { Types.Object }?
-	local listeners = LifecycleListeners[id]
+function Modding.GetListeners(name: string): { Types.Object }?
+	local listeners = LifecycleListeners[name]
 	if not listeners then return nil end
 
 	local results = {}
@@ -126,4 +130,4 @@ function Modding.OnListenerRemoved(callback: (object: Types.Object) -> (), id: s
 	return event:Connect(callback)
 end
 
-return Modding
+return Modding :: Types.Modding

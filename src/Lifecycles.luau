@@ -1,7 +1,7 @@
-local Modding = require(script.Parent.Modding)
+local Types = require(script.Parent.Types)
 local Reflect = require(script.Parent.Reflect)
 local Signal = require(script.Parent.Signal)
-local Types = require(script.Parent.Types)
+local Modding = require(script.Parent.Modding) :: Types.ModdingPrivate
 
 type PrivateLifecycle = {
 	Name: string,
@@ -60,6 +60,8 @@ end
 local Lifecycles = {}
 
 function Lifecycles.RegisterLifecycle<T...>(name: string, sendSelf: boolean?)
+	Modding.RegisterLifecycle(name)
+
 	local signal = Signal.new()
 
 	Registry[name] = {

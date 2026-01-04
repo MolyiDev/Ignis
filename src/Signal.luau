@@ -69,6 +69,13 @@ local function yielder()
 	end
 end
 
+local function errorHandler(err)
+	local message = tostring(err)
+	local trace = debug.traceback(nil, 2)
+
+	return string.format("\n[Signal] Error: %s\n%s", message, trace)
+end
+
 local function linkConnectionPriority(self: PrivateSignal, connection: PrivateConnection)
 	local head = self.Head
 	local priority = connection.Priority
@@ -138,7 +145,7 @@ local function fireSync(self: PrivateSignal, ...: any)
 		local success, err
 
 		if not connection.BoundArgs then
-			success, err = pcall(connection.Callback, ...)
+			success, err = xpcall(connection.Callback, errorHandler, ...)
 		else
 			local boundArgs = connection.BoundArgs
 			local len = #boundArgs
@@ -150,14 +157,14 @@ local function fireSync(self: PrivateSignal, ...: any)
 				boundArgs[count] = select(i, ...)
 			end
 
-			success, err = pcall(connection.Callback, table_unpack(boundArgs))
+			success, err = xpcall(connection.Callback, errorHandler, table_unpack(boundArgs))
 
 			for j = count, len + 1, -1 do
 				boundArgs[j] = nil
 			end
 		end
 
-		if not success then task_spawn(error, tostring(err) :: any) end
+		if not success then task_spawn(error, err :: any, 0) end
 
 		connection = connection.Next
 	end

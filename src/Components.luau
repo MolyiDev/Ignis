@@ -2,7 +2,6 @@ local CollectionService = game:GetService("CollectionService")
 local Signal = require(script.Parent.Signal)
 local Types = require(script.Parent.Types)
 
---==[ Components ]==--
 local Components = {}
 Components.OnComponentAdded = Signal.new()
 Components.OnComponentRemoved = Signal.new()
@@ -117,10 +116,6 @@ function Components.AddComponent(instance: Instance, component: Types.Component)
 
 	local object = constructComponent(instance, component)
 
-	Bin[object] = instance.Destroying:Connect(function()
-		Components.RemoveComponent(instance, component)
-	end)
-
 	ActiveComponents[instance][component] = object
 
 	Components.OnComponentAdded:Fire(object, instance)
@@ -135,10 +130,6 @@ function Components.RemoveComponent(instance: Instance, component: Types.Compone
 	local object = ActiveComponents[instance][component]
 
 	if object.OnDespawn then task.spawn(object.OnDespawn, object) end
-
-	local connection = Bin[object]
-	if connection and connection.Connected then connection:Disconnect() end
-	Bin[object] = nil
 
 	ActiveComponents[instance][component] = nil
 

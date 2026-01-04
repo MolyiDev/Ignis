@@ -67,4 +67,16 @@ export type Registry = {
 	Disconnected: { [any]: { [any]: any } },
 }
 
+export type Modding = {
+	AddListener: <T>(object: T, ignoreList: { string }?) -> (),
+	RemoveListener: (object: Object) -> (),
+	GetListeners: (name: string) -> { Object }?,
+	OnListenerAdded: (callback: (object: Types.Object) -> (), id: string?) -> (),
+	OnListenerRemoved: (callback: (object: Types.Object) -> (), id: string?) -> (),
+}
+
+export type ModdingPrivate = {
+	RegisterLifecycle: (name: string) -> (),
+}
+
 return nil
