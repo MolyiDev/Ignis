@@ -23,6 +23,11 @@ local PendingDependencies: { [string]: Types.Object } = {}
 local IsIgnited = false
 local HasShutdown = false
 
+local function safeRequire(module: ModuleScript)
+	local success, err = pcall(require, module)
+	if not success then error(`[Ignis] Failed to load module '{module:GetFullName()}': {err}`, 0) end
+end
+
 local function topologicalSort(objects: { any }): { any }
 	local sorted = {}
 	local visited = {}
@@ -60,7 +65,7 @@ function Core.LoadDescendants(parent: Instance, predicate: Types.Predicate<Insta
 		if not descendant:IsA("ModuleScript") then continue end
 		if predicate and not predicate(descendant) then continue end
 
-		require(descendant)
+		safeRequire(descendant)
 	end
 end
 
@@ -69,7 +74,7 @@ function Core.LoadChildren(parent: Instance, predicate: Types.Predicate<Instance
 		if not child:IsA("ModuleScript") then continue end
 		if predicate and not predicate(child) then continue end
 
-		require(child)
+		safeRequire(child)
 	end
 end
 
