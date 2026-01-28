@@ -1,5 +1,5 @@
 name = "molyidev/ignis"
-version = "0.1.0"
+version = "0.1.2"
 description = "Framework library."
 authors = ["Molyi"]
 repository = "https://github.com/MolyiDev/Ignis"

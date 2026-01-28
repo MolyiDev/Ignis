@@ -20,6 +20,7 @@ local onStop = Lifecycles.RegisterLifecycle(Core.DefaultLifecycles.OnStop, true)
 local Singletons: { any } = {}
 local Priorities: { [number]: number } = {}
 local PendingDependencies: { [string]: Types.Object } = {}
+local RegisteredSources: { [string]: boolean } = {}
 local IsIgnited = false
 local HasShutdown = false
 
@@ -40,14 +41,12 @@ local function topologicalSort(objects: { any }): { any }
 
 		if dependencies then
 			for _, dependency in dependencies do
-				if Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then visitor(dependency) end
+				if Reflect.HasMetadata(dependency) then visitor(dependency) end
 			end
 		end
 
 		for _, dependency in node do
-			if typeof(dependency) == "table" and Reflect.ReadMetadata(dependency, Reflect.Enum.IsSingleton) then
-				visitor(dependency)
-			end
+			if typeof(dependency) == "table" and Reflect.HasMetadata(dependency) then visitor(dependency) end
 		end
 
 		sorted[#sorted + 1] = node
@@ -92,10 +91,15 @@ function Core.Dependency<T>(dependency: T)
 end
 
 function Core.Register<T>(members: T, dependencies: { any }?, priority: number?): T
+	local source = debug.info(2, "s")
+
+	if RegisteredSources[source] then error(`[Ignis] Module {source} is already registered.`, 2) end
+
+	RegisteredSources[source] = true
+
 	priority = if typeof(priority) == "number" then priority else nil
 	dependencies = if typeof(dependencies) == "table" then dependencies else {}
 
-	local source = debug.info(2, "s")
 	local pending = PendingDependencies[source]
 	if pending then
 		for _, dep in pending do
@@ -105,7 +109,6 @@ function Core.Register<T>(members: T, dependencies: { any }?, priority: number?)
 		PendingDependencies[source] = nil
 	end
 
-	Reflect.SetMetadata(members, Reflect.Enum.IsSingleton, true)
 	Reflect.SetMetadata(members, Reflect.Enum.Priority, priority)
 	Reflect.SetMetadata(members, Reflect.Enum.Dependencies, dependencies)
 	Reflect.SetMetadata(members, Reflect.Enum.Source, source)

@@ -2,10 +2,9 @@ local Types = require(script.Parent.Types)
 
 local Reflect = {}
 Reflect.Enum = table.freeze({
-	IsSingleton = 0,
-	Priority = 1,
-	Dependencies = 2,
-	Source = 3,
+	Priority = 0,
+	Dependencies = 1,
+	Source = 2,
 })
 
 local Metadata: { [any]: Types.Metadata } = setmetatable({}, { __mode = "k" }) :: any
@@ -19,6 +18,10 @@ function Reflect.GetMetadata<T>(object: T): Types.Metadata
 	end
 
 	return data
+end
+
+function Reflect.HasMetadata<T>(object: T): boolean
+	return Metadata[object] ~= nil
 end
 
 function Reflect.ReadMetadata<T>(object: T, key: number): unknown

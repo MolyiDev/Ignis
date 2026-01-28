@@ -14,13 +14,13 @@ pesde add molyidev/ignis
 ### Wally
 
 ```toml
-Ignis = "molyidev/ignis@^0.1.0"
+Ignis = "molyidev/ignis@^0.1.2"
 ```
 
 ## Why use Ignis?
 
 * **Fully Typed:** Designed to work with the new Luau type solver.
-* **Zero bloat:** Ignis was carefully crafted to have minimal code bloat.
+* **Minimal Boilerplate:** Ignis was carefully crafted to be simple and require minimal boilerplate code.
 
 ## Usage
 
